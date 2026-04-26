@@ -68,7 +68,7 @@ bool IcebergTableSet::FillEntry(ClientContext &context, IcebergTableInformation 
 	}
 	ic_catalog.table_request_cache.SetOrOverwrite(context, table_key, std::move(get_table_result.result_));
 	{
-		lock_guard<std::mutex> cache_lock(ic_catalog.table_request_cache.Lock());
+		lock_guard<mutex> cache_lock(ic_catalog.table_request_cache.Lock());
 		auto cached_table_result = ic_catalog.table_request_cache.Get(context, table_key, cache_lock, false);
 		D_ASSERT(cached_table_result);
 		auto &load_table_result = *cached_table_result->load_table_result;

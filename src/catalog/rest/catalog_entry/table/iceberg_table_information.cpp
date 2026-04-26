@@ -578,7 +578,7 @@ IcebergTableInformation IcebergTableInformation::Copy(ClientContext &context) co
 	auto ret = IcebergTableInformation(catalog, schema, name);
 	auto table_key = ret.GetTableKey();
 	{
-		lock_guard<std::mutex> cache_lock(catalog.table_request_cache.Lock());
+		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
 		auto cached_result = catalog.table_request_cache.Get(context, table_key, cache_lock, false);
 		D_ASSERT(cached_result);
 		auto &cached_table_result = *cached_result->load_table_result;

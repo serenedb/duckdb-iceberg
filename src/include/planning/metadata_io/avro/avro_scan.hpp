@@ -38,7 +38,7 @@ public:
 	void InitializeChunk(DataChunk &chunk) const;
 	bool Finished() const;
 	const vector<column_t> &GetColumnIds() const;
-	const idx_t IcebergVersion() const;
+	idx_t IcebergVersion() const;
 
 public:
 	string path;
