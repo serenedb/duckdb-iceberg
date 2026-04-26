@@ -146,7 +146,6 @@ void IcebergMultiFileList::ScanPuffinFile(const BoundIcebergManifestEntry &bound
 	auto caching_file_system = CachingFileSystem::Get(context);
 
 	auto caching_file_handle = caching_file_system.OpenFile(file_path, FileOpenFlags::FILE_FLAGS_READ);
-	data_ptr_t data = nullptr;
 
 	D_ASSERT(!data_file.content_offset.IsNull());
 	D_ASSERT(!data_file.content_size_in_bytes.IsNull());
@@ -154,7 +153,7 @@ void IcebergMultiFileList::ScanPuffinFile(const BoundIcebergManifestEntry &bound
 	auto offset = data_file.content_offset.GetValue<int64_t>();
 	auto length = data_file.content_size_in_bytes.GetValue<int64_t>();
 
-	auto buf_handle = caching_file_handle->Read(data, length, offset);
+	auto buf_handle = caching_file_handle->Read(length, offset);
 	auto buffer_data = buf_handle.Ptr();
 
 	auto it = positional_delete_data.find(data_file.referenced_data_file);

@@ -160,12 +160,12 @@ bool IcebergMultiFileList::FinishedScanningDeletes() const {
 optional_ptr<const TableFilter> IcebergMultiFileList::GetFilterForColumnIndex(const TableFilterSet &filter_set,
                                                                               const ColumnIndex &column_index) const {
 	auto primary_index = column_index.GetPrimaryIndex();
-	auto filter_it = filter_set.filters.find(primary_index);
-	if (filter_it == filter_set.filters.end()) {
+	auto parent_filter_ptr = filter_set.TryGetFilterByColumnIndex(ProjectionIndex(primary_index));
+	if (!parent_filter_ptr) {
 		return nullptr;
 	}
 
-	auto &parent_filter = *filter_it->second;
+	auto &parent_filter = *parent_filter_ptr;
 	auto &child_indexes = column_index.GetChildIndexes();
 
 	reference<const TableFilter> current_filter(parent_filter);
@@ -241,15 +241,15 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
 	TableFilterSet result_filter_set;
 
 	// Add pre-existing filters
-	for (auto &entry : table_filters.filters) {
-		result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
+	for (auto &entry : table_filters) {
+		result_filter_set.PushFilter(entry.GetIndex(), entry.Filter().Copy());
 	}
 
 	// Add new filters
-	for (auto &entry : new_filters.filters) {
-		auto &column_id = entry.first;
+	for (auto &entry : new_filters) {
+		auto column_id = entry.GetIndex();
 		if (column_id < names.size()) {
-			result_filter_set.PushFilter(ColumnIndex(column_id), entry.second->Copy());
+			result_filter_set.PushFilter(column_id, entry.Filter().Copy());
 		}
 	}
 
@@ -264,23 +264,22 @@ unique_ptr<MultiFileList>
 IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                             const vector<string> &names, const vector<LogicalType> &types,
                                             const vector<column_t> &column_ids, TableFilterSet &filters) const {
-	if (filters.filters.empty()) {
+	if (!filters.HasFilters()) {
 		return nullptr;
 	}
 
 	TableFilterSet filters_copy;
-	for (auto &filter : filters.filters) {
-		auto column_id = column_ids[filter.first];
-		auto previously_pushed_down_filter = this->table_filters.filters.find(column_id);
-		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
-		    filter.second->Equals(*previously_pushed_down_filter->second)) {
+	for (auto &entry : filters) {
+		auto column_id = column_ids[entry.GetIndex()];
+		auto previously_pushed_down_filter = this->table_filters.TryGetFilterByColumnIndex(ProjectionIndex(column_id));
+		if (previously_pushed_down_filter && entry.Filter().Equals(*previously_pushed_down_filter)) {
 			// Skip filters that we already have pushed down
 			continue;
 		}
-		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
+		filters_copy.PushFilter(ProjectionIndex(column_id), entry.Filter().Copy());
 	}
 
-	if (!filters_copy.filters.empty()) {
+	if (filters_copy.HasFilters()) {
 		auto new_snap = PushdownInternal(context, filters_copy);
 		return std::move(new_snap);
 	}
@@ -302,7 +301,7 @@ unique_ptr<MultiFileList> IcebergMultiFileList::ComplexFilterPushdown(ClientCont
 
 	vector<FilterPushdownResult> unused;
 	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, unused);
-	if (filter_set.filters.empty()) {
+	if (!filter_set.HasFilters()) {
 		return nullptr;
 	}
 
@@ -462,8 +461,7 @@ IcebergPredicateStats IcebergPredicateStats::DeserializeBounds(const Value &lowe
 bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestFile &manifest_file,
                                              const IcebergManifestEntry &manifest_entry,
                                              IcebergManifestContentType file_type) const {
-	D_ASSERT(!table_filters.filters.empty());
-	auto &filters = table_filters.filters;
+	D_ASSERT(table_filters.HasFilters());
 	auto &schema = GetSchema().columns;
 
 	auto &metadata = GetMetadata();
@@ -476,9 +474,9 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestFile &manifest
 
 	for (idx_t index = 0; index < schema.size(); index++) {
 		auto &column = *schema[index];
-		auto it = filters.find(index);
+		auto filter_ptr = table_filters.TryGetFilterByColumnIndex(ProjectionIndex(index));
 
-		if (it == filters.end()) {
+		if (!filter_ptr) {
 			continue;
 		}
 		auto &data_file = manifest_entry.data_file;
@@ -611,7 +609,7 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestFile &manifest
 			stats.has_nan = nan_counts != 0;
 		}
 
-		auto &filter = *it->second;
+		auto &filter = *filter_ptr;
 		if (!IcebergPredicate::MatchBounds(context, filter, stats, IcebergTransform::Identity())) {
 			//! If any predicate fails, exclude the file
 			return false;
@@ -693,7 +691,7 @@ optional_ptr<const BoundIcebergManifestEntry> IcebergMultiFileList::GetDataFile(
 
 			auto &data_file = manifest_entry.data_file;
 			// Check whether current data file is filtered out.
-			if (!table_filters.filters.empty() &&
+			if (table_filters.HasFilters() &&
 			    !FileMatchesFilter(manifest_file, manifest_entry, IcebergManifestContentType::DATA)) {
 				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
 				           data_file.file_path);
@@ -787,7 +785,7 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
 		    field_summaries.size(), partition_spec.fields.size());
 	}
 
-	if (table_filters.filters.empty()) {
+	if (!table_filters.HasFilters()) {
 		//! There are no filters
 		return true;
 	}
@@ -1032,7 +1030,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
 			}
 			auto &data_file = manifest_entry.data_file;
 			// Check whether current data file is filtered out.
-			if (!table_filters.filters.empty() &&
+			if (table_filters.HasFilters() &&
 			    !FileMatchesFilter(manifest_file, manifest_entry, IcebergManifestContentType::DELETE)) {
 				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
 				           data_file.file_path);

@@ -142,7 +142,7 @@ static unique_ptr<FunctionData> GetIcebergTablePropertiesBind(ClientContext &con
 }
 
 static void AddString(Vector &vec, idx_t index, string_t &&str) {
-	FlatVector::GetData<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
+	FlatVector::GetDataMutable<string_t>(vec)[index] = StringVector::AddString(vec, std::move(str));
 }
 
 static void SetIcebergTablePropertiesFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
@@ -171,7 +171,7 @@ static void SetIcebergTablePropertiesFunction(ClientContext &context, TableFunct
 	auto table_name = iceberg_table->name;
 	global_state.properties_set = true;
 	// set success output, failure happens during transaction commit.
-	FlatVector::GetData<int64_t>(output.data[0])[0] = bind_data.properties.size();
+	FlatVector::GetDataMutable<int64_t>(output.data[0])[0] = bind_data.properties.size();
 	output.SetCardinality(1);
 }
 
@@ -200,7 +200,7 @@ static void RemoveIcebergTablePropertiesFunction(ClientContext &context, TableFu
 	auto table_name = iceberg_table->name;
 	global_state.properties_removed = true;
 	// set success output, failure happens during transaction commit.
-	FlatVector::GetData<int64_t>(output.data[0])[0] = bind_data.properties.size();
+	FlatVector::GetDataMutable<int64_t>(output.data[0])[0] = bind_data.properties.size();
 	output.SetCardinality(1);
 }
 

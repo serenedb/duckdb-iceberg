@@ -432,18 +432,18 @@ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &
 // Manifests, and does not happen in any other reads
 static void FixSamePhysicalTypeCasts(BoundCastInfo &cast_info, const LogicalType &source_type,
                                      const LogicalType &target_type) {
-	if (cast_info.function == DefaultCasts::TryVectorNullCast &&
+	if (cast_info.GetFunction() == DefaultCasts::TryVectorNullCast &&
 	    source_type.InternalType() == target_type.InternalType()) {
-		cast_info.function = DefaultCasts::ReinterpretCast;
+		cast_info.SetFunction(DefaultCasts::ReinterpretCast);
 		return;
 	}
-	if (!cast_info.cast_data) {
+	if (!cast_info.GetCastData()) {
 		return;
 	}
 	if (source_type.id() != LogicalTypeId::STRUCT || target_type.id() != LogicalTypeId::STRUCT) {
 		return;
 	}
-	auto &struct_data = cast_info.cast_data->Cast<StructBoundCastData>();
+	auto &struct_data = cast_info.GetCastData()->Cast<StructBoundCastData>();
 	auto &src_children = StructType::GetChildTypes(source_type);
 	auto &tgt_children = StructType::GetChildTypes(target_type);
 	for (idx_t i = 0; i < struct_data.child_cast_info.size(); i++) {
