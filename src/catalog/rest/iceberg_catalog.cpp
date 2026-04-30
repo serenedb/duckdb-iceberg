@@ -129,7 +129,7 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 }
 
 unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
-                                                            TableCatalogEntry &table,
+                                                            CatalogEntry &table,
                                                             unique_ptr<LogicalOperator> plan) {
 	throw NotImplementedException("IcebergCatalog BindCreateIndex");
 }
