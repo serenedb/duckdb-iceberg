@@ -992,10 +992,11 @@ void IcebergMultiFileList::InitializeFiles(lock_guard<mutex> &guard) const {
 		data_manifest_reader = make_uniq<manifest_file::ManifestReader>(*data_manifest_read_state->scan);
 
 		auto &executor = data_manifest_read_state->executor;
-		auto &scheduler = TaskScheduler::GetScheduler(context);
-		auto worker_thread_count = scheduler.NumberOfThreads();
+		// TODO(codeworse): fix mutli-threaded read and uncommit this
+		//  auto &scheduler = TaskScheduler::GetScheduler(context);
+		//  auto worker_thread_count = scheduler.NumberOfThreads();
 
-		auto num_threads = MinValue<idx_t>(worker_thread_count, data_manifests.size());
+		auto num_threads = static_cast<idx_t>(1);
 		data_manifest_read_state->in_progress_tasks = num_threads;
 		for (idx_t i = 0; i < num_threads; i++) {
 			executor.ScheduleTask(make_uniq<ManifestReadTask>(*data_manifest_read_state));
