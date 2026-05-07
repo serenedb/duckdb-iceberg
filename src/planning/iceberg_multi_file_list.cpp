@@ -1019,6 +1019,7 @@ void IcebergMultiFileList::InitializeFiles(lock_guard<mutex> &guard) const {
 		auto &executor = data_manifest_read_state->executor;
 		auto &scheduler = TaskScheduler::GetScheduler(context);
 		auto worker_thread_count = scheduler.NumberOfThreads();
+
 		auto num_threads = MinValue<idx_t>(worker_thread_count, data_manifests.size());
 		data_manifest_read_state->in_progress_tasks = num_threads;
 		for (idx_t i = 0; i < num_threads; i++) {

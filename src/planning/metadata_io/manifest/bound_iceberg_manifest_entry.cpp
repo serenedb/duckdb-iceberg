@@ -3,12 +3,12 @@
 namespace duckdb {
 
 BoundIcebergManifestEntry::BoundIcebergManifestEntry(idx_t file_idx, const IcebergManifestEntry &entry)
-    : manifest_file_idx(file_idx), entry(&entry), has_first_row_id(false) {
+    : manifest_file_idx(file_idx), entry(entry), has_first_row_id(false) {
 }
 
 BoundIcebergManifestEntry::BoundIcebergManifestEntry(idx_t file_idx, const IcebergManifestEntry &entry,
                                                      int64_t first_row_id)
-    : manifest_file_idx(file_idx), entry(&entry), has_first_row_id(true), first_row_id(first_row_id) {
+    : manifest_file_idx(file_idx), entry(entry), has_first_row_id(true), first_row_id(first_row_id) {
 }
 
 int64_t BoundIcebergManifestEntry::GetFirstRowId() const {
