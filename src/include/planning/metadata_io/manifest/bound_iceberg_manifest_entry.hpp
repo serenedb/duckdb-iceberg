@@ -21,7 +21,7 @@ public:
 public:
 	//! Reference to the IcebergManifestListEntry this entry originates from
 	idx_t manifest_file_idx;
-	const IcebergManifestEntry &entry;
+	const IcebergManifestEntry *entry = nullptr;
 
 private:
 	//! The materialized first row id of the data file

@@ -312,6 +312,9 @@ vector<OpenFileInfo> IcebergMultiFileList::GetAllFiles() const {
 	vector<OpenFileInfo> file_list;
 	//! Lock is required because it reads the 'manifest_entries' vector
 	lock_guard<mutex> guard(lock);
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	}
 	for (idx_t i = 0; i < data_manifest_entries.size(); i++) {
 		file_list.push_back(GetFileInternal(i, guard));
 	}
@@ -333,9 +336,13 @@ idx_t IcebergMultiFileList::GetTotalFileCount() const {
 	// in the Manifest List should give us this information without scanning the manifest list
 	lock_guard<mutex> guard(lock);
 
-	idx_t i = data_manifest_entries.size();
-	while (!GetFileInternal(i, guard).path.empty()) {
-		i++;
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	} else {
+		idx_t i = data_manifest_entries.size();
+		while (!GetFileInternal(i, guard).path.empty()) {
+			i++;
+		}
 	}
 	return data_manifest_entries.size();
 }
@@ -371,7 +378,7 @@ vector<IcebergPartitionInfo> IcebergMultiFileList::GetPartitionInfoForDataFile(c
 	lock_guard<mutex> guard(lock);
 	auto iceberg_path = GetPath();
 	for (auto &bound_entry : data_manifest_entries) {
-		auto &data_file = bound_entry.entry.data_file;
+		auto &data_file = bound_entry.entry->data_file;
 		string entry_path = data_file.file_path;
 		if (options.allow_moved_paths) {
 			entry_path = IcebergUtils::GetFullPath(iceberg_path, entry_path, fs);
@@ -715,6 +722,20 @@ optional_ptr<const BoundIcebergManifestEntry> IcebergMultiFileList::GetDataFile(
 	return data_manifest_entries[file_id];
 }
 
+void IcebergMultiFileList::EnsureSortedManifestEntries(lock_guard<mutex> &guard) const {
+	if (data_manifest_entries_sorted) {
+		return;
+	}
+	if (!initialized) {
+		InitializeFiles(guard);
+	}
+	GetDataFile(NumericLimits<idx_t>::Maximum(), guard);
+	std::sort(data_manifest_entries.begin(), data_manifest_entries.end(), [](const auto &lhs, const auto &rhs) {
+		return lhs.entry->data_file.file_path < rhs.entry->data_file.file_path;
+	});
+	data_manifest_entries_sorted = true;
+}
+
 OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mutex> &guard) const {
 	if (!initialized) {
 		InitializeFiles(guard);
@@ -728,7 +749,7 @@ OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mut
 	const auto &bound_manifest_entry = *found_manifest_entry;
 	auto &manifest_file = GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DATA);
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	const auto &path = data_file.file_path;
 
 	if (!StringUtil::CIEquals(data_file.file_format, "parquet")) {
@@ -753,13 +774,16 @@ OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mut
 	if (bound_manifest_entry.HasFirstRowId()) {
 		extended_info->options["first_row_id"] = Value::BIGINT(bound_manifest_entry.GetFirstRowId());
 	}
-	extended_info->options["sequence_number"] = Value::BIGINT(manifest_entry.GetSequenceNumber(manifest_file));
+	extended_info->options["sequence_number"] = Value::BIGINT(manifest_entry->GetSequenceNumber(manifest_file));
 	res.extended_info = extended_info;
 	return res;
 }
 
 OpenFileInfo IcebergMultiFileList::GetFile(idx_t file_id) const {
 	lock_guard<mutex> guard(lock);
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	}
 	return GetFileInternal(file_id, guard);
 }
 
@@ -828,9 +852,9 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 	//! Look through all the equality delete files with a *higher* sequence number
 	auto &manifest_entry = bound_manifest_entry.entry;
 	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	auto &metadata = GetMetadata();
-	auto it = equality_delete_data.upper_bound(manifest_entry.GetSequenceNumber(manifest_file));
+	auto it = equality_delete_data.upper_bound(manifest_entry->GetSequenceNumber(manifest_file));
 	for (; it != equality_delete_data.end(); it++) {
 		auto &files = it->second->files;
 		for (auto &file : files) {
@@ -992,11 +1016,10 @@ void IcebergMultiFileList::InitializeFiles(lock_guard<mutex> &guard) const {
 		data_manifest_reader = make_uniq<manifest_file::ManifestReader>(*data_manifest_read_state->scan);
 
 		auto &executor = data_manifest_read_state->executor;
-		// TODO(codeworse): fix mutli-threaded read and uncommit this
-		//  auto &scheduler = TaskScheduler::GetScheduler(context);
-		//  auto worker_thread_count = scheduler.NumberOfThreads();
-
-		auto num_threads = static_cast<idx_t>(1);
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		auto worker_thread_count = static_cast<idx_t>(scheduler.NumberOfThreads());
+		auto num_threads = MinValue<idx_t>(worker_thread_count, data_manifests.size());
+		;
 		data_manifest_read_state->in_progress_tasks = num_threads;
 		for (idx_t i = 0; i < num_threads; i++) {
 			executor.ScheduleTask(make_uniq<ManifestReadTask>(*data_manifest_read_state));
@@ -1051,7 +1074,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
 
 	for (auto &bound_manifest_entry : delete_manifest_entries) {
 		auto &manifest_entry = bound_manifest_entry.entry;
-		auto &data_file = manifest_entry.data_file;
+		auto &data_file = manifest_entry->data_file;
 		if (StringUtil::CIEquals(data_file.file_format, "parquet")) {
 			ScanDeleteFile(bound_manifest_entry, global_columns, column_indexes);
 		} else if (StringUtil::CIEquals(data_file.file_format, "puffin")) {
@@ -1101,7 +1124,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
                                           const vector<MultiFileColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &column_indexes) const {
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	auto delete_file_path = data_file.file_path;
 	auto iceberg_deletes_scan = IcebergFunctions::GetIcebergDeletesScanFunction(context);
 	auto &delete_scan_function = iceberg_deletes_scan.functions[0];

@@ -196,7 +196,7 @@ static void ApplyPartitionConstants(const IcebergMultiFileList &multi_file_list,
 	auto &manifest_file =
 	    multi_file_list.GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DATA);
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 
 	// Get the partition spec for this file
 	auto &partition_specs = multi_file_list.GetMetadata().partition_specs;
@@ -325,7 +325,7 @@ void IcebergMultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, cons
 		lock_guard<mutex> guard(multi_file_list.lock);
 		const auto &bound_manifest_entry = multi_file_list.GetManifestEntry(file_id);
 		const auto &manifest_entry = bound_manifest_entry.entry;
-		const auto &data_file = manifest_entry.data_file;
+		const auto &data_file = manifest_entry->data_file;
 		// The path of the data file where this chunk was read from
 		const auto &file_path = data_file.file_path;
 		lock_guard<mutex> delete_guard(multi_file_list.delete_lock);
