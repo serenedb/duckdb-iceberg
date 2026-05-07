@@ -257,6 +257,7 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
 	filtered_list->names = names;
 	filtered_list->types = types;
 	filtered_list->have_bound = true;
+	filtered_list->need_sort = need_sort;
 	return filtered_list;
 }
 
