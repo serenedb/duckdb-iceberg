@@ -94,16 +94,15 @@ static void IcebergSetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, 
 	file_list.GetScanPlanner().SetScanOrder(std::move(order_options));
 }
 
-//! FIXME: needs v1.5.1, causes a crash on v1.5.0
-// static bool IcebergScanSupportsPushdownType(const FunctionData &bind_data_p, idx_t column_id) {
-//	// Don't push down filters on the _row_id virtual column
-//	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-//		return false;
-//	}
+static bool IcebergScanSupportsPushdownType(const FunctionData &bind_data_p, idx_t column_id) {
+	// Don't push down filters on the _row_id virtual column
+	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		return false;
+	}
 
-//	// Default behavior for other columns
-//	return true;
-//}
+	// Default behavior for other columns
+	return true;
+}
 
 TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &loader) {
 	// The iceberg_scan function is constructed by grabbing the parquet scan from the Catalog, then injecting the
@@ -128,7 +127,7 @@ TableFunctionSet IcebergFunctions::GetIcebergScanFunction(ExtensionLoader &loade
 		function.get_virtual_columns = IcebergVirtualColumns;
 		function.get_partition_stats = IcebergMultiFileReader::IcebergGetPartitionStats;
 		function.set_scan_order = IcebergSetScanOrder;
-		// function.supports_pushdown_type = IcebergScanSupportsPushdownType;
+		function.supports_pushdown_type = IcebergScanSupportsPushdownType;
 
 		// Schema param is just confusing here, so the options are rebuilt without it
 		auto &signature = function.GetSignature();
