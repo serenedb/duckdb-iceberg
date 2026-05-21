@@ -117,9 +117,6 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     include_directories(${CURL_INCLUDE_DIRS})
 endif()
 
-# Roaring is installed via vcpkg and used here
-find_package(roaring CONFIG REQUIRED)
-
 # Reset the TARGET_NAME, the AWS find_package build could bleed into our build -
 # overriding `TARGET_NAME`
 set(TARGET_NAME iceberg)
@@ -131,8 +128,8 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 endif()
 
 # Link Roaring library
-target_link_libraries(${EXTENSION_NAME} PUBLIC roaring::roaring roaring::roaring-headers roaring::roaring-headers-cpp)
-target_link_libraries(${TARGET_NAME}_loadable_extension roaring::roaring roaring::roaring-headers roaring::roaring-headers-cpp)
+target_link_libraries(${EXTENSION_NAME} PUBLIC roaring::roaring roaring-headers roaring-headers-cpp)
+target_link_libraries(${TARGET_NAME}_loadable_extension roaring::roaring roaring-headers roaring-headers-cpp)
 
 install(
   TARGETS ${EXTENSION_NAME} ${TARGET_NAME}_loadable_extension
