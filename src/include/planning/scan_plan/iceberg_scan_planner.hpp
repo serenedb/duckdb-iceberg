@@ -38,6 +38,7 @@ public:
 	void SetScanInfo(shared_ptr<IcebergScanInfo> scan_info);
 	void SetOptions(const IcebergOptions &options);
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
+	void SortFilesByPath();
 	void DisableServerSidePlanning();
 	void RequireRowIds();
 
@@ -93,6 +94,8 @@ private:
 	mutable vector<BoundIcebergManifestListEntry> data_manifests DUCKDB_GUARDED_BY(shared_state->lock);
 	mutable vector<bool> data_manifest_matches DUCKDB_GUARDED_BY(shared_state->lock);
 	mutable IcebergScanOrder scan_order DUCKDB_GUARDED_BY(shared_state->lock);
+	bool sort_by_path DUCKDB_GUARDED_BY(shared_state->lock) = false;
+	mutable bool sorted_by_path DUCKDB_GUARDED_BY(shared_state->lock) = false;
 };
 
 } // namespace duckdb
