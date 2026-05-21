@@ -92,7 +92,7 @@ const vector<column_t> &AvroScan::GetColumnIds() const {
 	return column_ids;
 }
 
-const idx_t AvroScan::IcebergVersion() const {
+idx_t AvroScan::IcebergVersion() const {
 	return scan_info->IcebergVersion();
 }
 
