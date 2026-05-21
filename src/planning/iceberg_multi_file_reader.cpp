@@ -280,11 +280,13 @@ ReaderInitializeType IcebergMultiFileReader::InitializeReader(MultiFileReaderDat
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
 	             gstate.multi_file_reader_state.get());
 
-	//! Create a mapping from field_id -> column index
+	//! field_id -> column index. Virtual columns have no field-id, skip them.
 	unordered_map<int32_t, column_t> id_to_global_column;
 	for (column_t i = 0; i < global_columns.size(); i++) {
 		auto &col = global_columns[i];
-		D_ASSERT(!col.identifier.IsNull());
+		if (col.identifier.IsNull()) {
+			continue;
+		}
 		id_to_global_column[col.identifier.GetValue<int32_t>()] = i;
 	}
 
@@ -356,11 +358,13 @@ void IcebergMultiFileReader::ApplyEqualityDeletes(ClientContext &context, DataCh
 		return;
 	}
 
-	//! Map from column_id to 'local_columns' index
+	//! column_id -> local_columns index. Virtual columns have no field-id, skip them.
 	unordered_map<int32_t, column_t> id_to_local_column;
 	for (column_t i = 0; i < local_columns.size(); i++) {
 		auto &col = local_columns[i];
-		D_ASSERT(!col.identifier.IsNull());
+		if (col.identifier.IsNull()) {
+			continue;
+		}
 		id_to_local_column[col.identifier.GetValue<int32_t>()] = i;
 	}
 
