@@ -128,8 +128,7 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	iceberg_transaction.deleted_schemas.insert(info.name.GetIdentifierName());
 }
 
-unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
-                                                            TableCatalogEntry &table,
+unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, CatalogEntry &table,
                                                             unique_ptr<LogicalOperator> plan) {
 	throw NotImplementedException("IcebergCatalog BindCreateIndex");
 }
