@@ -1,6 +1,6 @@
 #include "core/deletes/iceberg_deletion_vector.hpp"
 
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/bswap.hpp"
 
 #include "planning/iceberg_multi_file_list.hpp"
