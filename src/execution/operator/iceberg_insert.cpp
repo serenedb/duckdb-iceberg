@@ -814,7 +814,6 @@ IcebergCopyOptions IcebergInsert::GetCopyOptions(ClientContext &context, const I
 		result.filename_pattern.SetFilenamePattern("{uuidv7}");
 		result.partition_output = true;
 		result.write_empty_file = true;
-		result.rotate = false;
 	} else {
 		result.filename_pattern.SetFilenamePattern("{uuidv7}");
 		result.partition_output = false;
@@ -826,7 +825,6 @@ IcebergCopyOptions IcebergInsert::GetCopyOptions(ClientContext &context, const I
 		} else {
 			result.file_size_bytes = IcebergCatalog::DEFAULT_TARGET_FILE_SIZE;
 		}
-		result.rotate = true;
 	}
 
 	result.file_path = copy_input.data_path;
@@ -905,7 +903,6 @@ PhysicalOperator &IcebergInsert::PlanCopyForInsert(ClientContext &context, Physi
 	physical_copy.overwrite_mode = copy_options.overwrite_mode;
 	physical_copy.per_thread_output = copy_options.per_thread_output;
 	physical_copy.file_size_bytes = copy_options.file_size_bytes;
-	physical_copy.rotate = copy_options.rotate;
 	physical_copy.return_type = copy_options.return_type;
 
 	physical_copy.partition_output = copy_options.partition_output;

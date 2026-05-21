@@ -55,7 +55,6 @@ void PhysicalIcebergCreateTable::MakeCreateTableRequest(ClientContext &client_co
 		copy_op.overwrite_mode = copy_options.overwrite_mode;
 		copy_op.per_thread_output = copy_options.per_thread_output;
 		copy_op.file_size_bytes = copy_options.file_size_bytes;
-		copy_op.rotate = copy_options.rotate;
 		copy_op.return_type = copy_options.return_type;
 		copy_op.partition_output = copy_options.partition_output;
 		copy_op.write_partition_columns = copy_options.write_partition_columns;
