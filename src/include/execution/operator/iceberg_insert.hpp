@@ -56,7 +56,6 @@ public:
 	CopyOverwriteMode overwrite_mode;
 	bool per_thread_output;
 	optional_idx file_size_bytes;
-	bool rotate;
 	CopyFunctionReturnType return_type;
 	bool hive_file_pattern;
 
