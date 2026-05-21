@@ -139,7 +139,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateFunction(CatalogTransaction
 }
 
 void ICUnqualifyColumnRef(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		auto name = std::move(colref.column_names.back());
 		colref.column_names = {std::move(name)};
@@ -404,7 +404,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) 
 
 		auto &column = ResolveColumn<ChangeColumnTypeInfo>(change_type_info, new_schema);
 
-		if (change_type_info.expression->type != ExpressionType::OPERATOR_CAST) {
+		if (change_type_info.expression->GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 			throw NotImplementedException("ALTER TYPE with a USING expression is not supported for Iceberg tables");
 		}
 		VerifySchemaEvolution(updated_table.table_metadata, column, change_type_info.target_type);

@@ -695,7 +695,7 @@ static void GeneratePartitionExpressions(ClientContext &context, const IcebergCo
 
 		auto expr = GetPartitionExpression(context, copy_input, field);
 		projection_names.push_back(field.GetPartitionSpecFieldName());
-		projection_types.push_back(expr->return_type);
+		projection_types.push_back(expr->GetReturnType());
 		projection_expressions.push_back(std::move(expr));
 	}
 
@@ -867,11 +867,14 @@ static void GenerateProjection(ClientContext &context, PhysicalPlanGenerator &pl
 	// push the projection
 	vector<LogicalType> types;
 	for (auto &expr : expressions) {
-		auto &type = expr->return_type;
+		const auto &type = expr->GetReturnType();
 		if (type.id() == LogicalTypeId::HUGEINT) {
-			type = LogicalType::DECIMAL(38, 0);
+			auto type = LogicalType::DECIMAL(38, 0);
+			expr->SetReturnType(type);
+			types.push_back(std::move(type));
+		} else {
+			types.push_back(type);
 		}
-		types.push_back(type);
 	}
 	auto &proj =
 	    planner.Make<PhysicalProjection>(std::move(types), std::move(expressions), plan->estimated_cardinality);

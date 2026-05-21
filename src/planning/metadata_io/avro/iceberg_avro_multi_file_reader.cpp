@@ -457,10 +457,10 @@ static void FixSamePhysicalTypeCasts(BoundCastInfo &cast_info, const LogicalType
 }
 
 static void FixSamePhysicalTypeCastsInExpr(Expression &expr) {
-	if (expr.type == ExpressionType::OPERATOR_CAST) {
+	if (expr.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		FixSamePhysicalTypeCasts(cast_expr.bound_cast, cast_expr.source_type(), cast_expr.return_type);
-	} else if (expr.type == ExpressionType::BOUND_FUNCTION) {
+		FixSamePhysicalTypeCasts(cast_expr.bound_cast, cast_expr.source_type(), cast_expr.GetReturnType());
+	} else if (expr.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		for (auto &child : expr.Cast<BoundFunctionExpression>().children) {
 			if (child) {
 				FixSamePhysicalTypeCastsInExpr(*child);
