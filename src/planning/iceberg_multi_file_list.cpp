@@ -1086,7 +1086,7 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 	//! Look through all the equality delete files with a *higher* sequence number
 	auto &manifest_entry = bound_manifest_entry.entry;
 	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	auto &metadata = GetMetadata();
 	auto it = shared_state->equality_delete_data.upper_bound(manifest_entry.GetSequenceNumber(manifest_file));
 	for (; it != shared_state->equality_delete_data.end(); it++) {
