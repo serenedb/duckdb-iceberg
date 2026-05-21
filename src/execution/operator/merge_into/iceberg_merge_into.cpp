@@ -151,7 +151,7 @@ static unique_ptr<MergeIntoOperator> IcebergPlanMergeIntoAction(IcebergCatalog &
 		break;
 	}
 	case MergeActionType::MERGE_DELETE: {
-		LogicalDelete delete_op(op.table, 0);
+		LogicalDelete delete_op(op.table, TableIndex(0));
 
 		// we only push 2 columns for positional deletes
 		idx_t column_offset = 0;
@@ -170,7 +170,7 @@ static unique_ptr<MergeIntoOperator> IcebergPlanMergeIntoAction(IcebergCatalog &
 		break;
 	}
 	case MergeActionType::MERGE_INSERT: {
-		LogicalInsert insert_op(op.table, 0);
+		LogicalInsert insert_op(op.table, TableIndex(0));
 		insert_op.bound_constraints = std::move(bound_constraints);
 		for (auto &def : op.bound_defaults) {
 			insert_op.bound_defaults.push_back(def->Copy());

@@ -529,7 +529,7 @@ static unique_ptr<Expression> CreateColumnReference(const IcebergCopyInput &copy
                                                     idx_t column_index) {
 	if (copy_input.get_table_index.IsValid()) {
 		// logical plan generation: generate a bound column ref
-		ColumnBinding column_binding(copy_input.get_table_index.GetIndex(), column_index);
+		ColumnBinding column_binding(TableIndex(copy_input.get_table_index.GetIndex()), ProjectionIndex(column_index));
 		return make_uniq<BoundColumnRefExpression>(type, column_binding);
 	}
 	// physical plan generation: generate a reference directly
