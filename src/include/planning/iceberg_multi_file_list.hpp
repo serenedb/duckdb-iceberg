@@ -116,6 +116,7 @@ protected:
 private:
 	optional_ptr<ManifestReadBatch> TryGetNextBatch(lock_guard<mutex> &guard) const;
 	void FinishScanTasks(lock_guard<mutex> &guard) const;
+	void EnsureSortedManifestEntries(lock_guard<mutex> &guard) const;
 
 public:
 	ClientContext &context;
@@ -147,6 +148,7 @@ public:
 
 	mutable bool initialized = false;
 	const IcebergOptions &options;
+	bool need_sort = false;
 
 public:
 	//! References to items inside the 'manifest_entries' of the list entries in the 'delete_manifests'
@@ -163,6 +165,8 @@ public:
 private:
 	//! References to items inside the 'manifest_entries' of the list entries in the 'data_manifests'
 	mutable vector<BoundIcebergManifestEntry> data_manifest_entries;
+	//! Set once `data_manifest_entries` has been fully populated and sorted by file path.
+	mutable bool data_manifest_entries_sorted = false;
 	//! Combination of committed + transaction data manifests
 	mutable vector<BoundIcebergManifestListEntry> data_manifests;
 	//! Scanned data manifests of the snapshot being scanned
