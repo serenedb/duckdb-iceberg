@@ -500,7 +500,7 @@ vector<IcebergPartitionInfo> IcebergMultiFileList::GetPartitionInfoForDataFile(c
 	lock_guard<mutex> guard(lock);
 	auto iceberg_path = GetPath();
 	for (auto &bound_entry : data_manifest_entries) {
-		auto &data_file = bound_entry.entry.data_file;
+		auto &data_file = bound_entry.entry->data_file;
 		string entry_path = data_file.file_path;
 		if (options.allow_moved_paths) {
 			entry_path = IcebergUtils::GetFullPath(iceberg_path, entry_path, fs);
@@ -871,7 +871,7 @@ OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mut
 	const auto &bound_manifest_entry = *found_manifest_entry;
 	auto &manifest_file = GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DATA);
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	const auto &path = data_file.file_path;
 
 	if (!StringUtil::CIEquals(data_file.file_format, "parquet")) {
@@ -1196,7 +1196,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
 
 	for (auto &bound_manifest_entry : delete_manifest_entries) {
 		auto &manifest_entry = bound_manifest_entry.entry;
-		auto &data_file = manifest_entry.data_file;
+		auto &data_file = manifest_entry->data_file;
 		if (StringUtil::CIEquals(data_file.file_format, "parquet")) {
 			ScanDeleteFile(bound_manifest_entry, global_columns, column_indexes);
 		} else if (StringUtil::CIEquals(data_file.file_format, "puffin")) {
@@ -1246,7 +1246,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
                                           const vector<MultiFileColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &column_indexes) const {
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	auto delete_file_path = data_file.file_path;
 	auto iceberg_deletes_scan = IcebergFunctions::GetIcebergDeletesScanFunction(context);
 	auto &delete_scan_function = iceberg_deletes_scan.functions[0];
