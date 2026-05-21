@@ -66,7 +66,8 @@ bool CRC32::table_initialized = false;
 } // namespace
 
 shared_ptr<IcebergDeletionVectorData> IcebergDeletionVectorData::FromBlob(const BoundIcebergManifestEntry &entry,
-                                                                          data_ptr_t blob_start, idx_t blob_length) {
+                                                                          const_data_ptr_t blob_start,
+                                                                          idx_t blob_length) {
 	//! https://iceberg.apache.org/puffin-spec/#deletion-vector-v1-blob-type
 
 	auto blob_end = blob_start + blob_length;

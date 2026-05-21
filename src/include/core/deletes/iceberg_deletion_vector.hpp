@@ -15,8 +15,8 @@ public:
 	}
 
 public:
-	static shared_ptr<IcebergDeletionVectorData> FromBlob(const BoundIcebergManifestEntry &entry, data_ptr_t blob_start,
-	                                                      idx_t blob_length);
+	static shared_ptr<IcebergDeletionVectorData> FromBlob(const BoundIcebergManifestEntry &entry,
+	                                                      const_data_ptr_t blob_start, idx_t blob_length);
 	static vector<data_t> ToBlob(const unordered_map<int32_t, roaring::Roaring> &bitmaps);
 
 public:
