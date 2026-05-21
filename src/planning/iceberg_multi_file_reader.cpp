@@ -334,15 +334,13 @@ void IcebergMultiFileReader::ApplyEqualityDeletes(ClientContext &context, DataCh
 		return;
 	}
 
-	//! Map from column_id to 'local_columns' index
+	//! column_id -> local_columns index. Virtual columns have no field-id, skip them.
 	unordered_map<int32_t, column_t> id_to_local_column;
 	for (column_t i = 0; i < local_columns.size(); i++) {
 		auto &col = local_columns[i];
 		if (col.identifier.IsNull()) {
-			// column could be a virtual column
 			continue;
 		}
-		D_ASSERT(!col.identifier.IsNull());
 		id_to_local_column[col.identifier.GetValue<int32_t>()] = i;
 	}
 

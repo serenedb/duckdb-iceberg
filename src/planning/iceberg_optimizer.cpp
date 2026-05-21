@@ -50,10 +50,10 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
 		unordered_set<int32_t> required_field_ids;
 		for (auto &entry : delete_manifest_entries) {
 			auto &mft = entry.entry;
-			if (mft.data_file.content != IcebergManifestEntryContentType::EQUALITY_DELETES) {
+			if (mft->data_file.content != IcebergManifestEntryContentType::EQUALITY_DELETES) {
 				continue;
 			}
-			for (auto fid : mft.data_file.equality_ids) {
+			for (auto fid : mft->data_file.equality_ids) {
 				required_field_ids.insert(fid);
 			}
 		}
