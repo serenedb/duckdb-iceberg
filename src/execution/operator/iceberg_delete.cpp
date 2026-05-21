@@ -256,7 +256,7 @@ static void PopulateAlteredManifests(const IcebergMultiFileList &multi_file_list
 	}
 	for (auto &bound_entry : delete_data.entries) {
 		auto &entry = bound_entry.entry;
-		out.InvalidateFile(entry.data_file.file_path);
+		out.InvalidateFile(entry->data_file.file_path);
 	}
 }
 
