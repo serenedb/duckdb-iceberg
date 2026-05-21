@@ -185,7 +185,7 @@ static void ApplyPartitionConstants(const IcebergMultiFileList &multi_file_list,
 	auto &manifest_file =
 	    multi_file_list.GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DATA);
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 
 	// Get the partition spec for this file
 	auto &partition_specs = multi_file_list.GetMetadata().partition_specs;
@@ -291,7 +291,7 @@ void IcebergMultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, cons
 	auto file_id = reader.file_list_idx.GetIndex();
 
 	auto bound_manifest_entry = multi_file_list.GetManifestEntry(file_id);
-	const auto &file_path = bound_manifest_entry.entry.data_file.file_path;
+	const auto &file_path = bound_manifest_entry.entry->data_file.file_path;
 	multi_file_list.ProcessDeletes(global_columns, global_column_ids, gstate.projection_ids);
 	reader.deletion_filter = multi_file_list.GetPositionalDeletesForFile(file_path);
 

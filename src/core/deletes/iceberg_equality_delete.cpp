@@ -48,7 +48,7 @@ void IcebergMultiFileList::ScanEqualityDeleteFile(const BoundIcebergManifestEntr
                                                   const vector<ColumnIndex> &global_column_ids,
                                                   const vector<idx_t> &projection_ids) const {
 	auto &manifest_entry = bound_manifest_entry.entry;
-	auto &data_file = manifest_entry.data_file;
+	auto &data_file = manifest_entry->data_file;
 	auto &manifest_file = GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DELETE);
 	D_ASSERT(!data_file.equality_ids.empty());
 	D_ASSERT(source.ColumnCount() == local_columns.size());
@@ -63,7 +63,7 @@ void IcebergMultiFileList::ScanEqualityDeleteFile(const BoundIcebergManifestEntr
 	DataChunk result;
 	ColumnsReferencedByEqualityIds(source, result, local_columns, data_file.equality_ids);
 
-	const auto sequence_number = manifest_entry.GetSequenceNumber(manifest_file);
+	const auto sequence_number = manifest_entry->GetSequenceNumber(manifest_file);
 	//! Get or create the equality delete data for this sequence number
 	auto it = shared_state->equality_delete_data.find(sequence_number);
 	if (it == shared_state->equality_delete_data.end()) {
