@@ -15,8 +15,8 @@ public:
 	}
 
 public:
-	static shared_ptr<IcebergDeletionVectorData> FromBlob(const BoundIcebergManifestEntry &entry, data_ptr_t blob_start,
-	                                                      idx_t blob_length);
+	static shared_ptr<IcebergDeletionVectorData> FromBlob(const BoundIcebergManifestEntry &entry,
+	                                                      const_data_ptr_t blob_start, idx_t blob_length);
 	static vector<data_t> ToBlob(const unordered_map<int32_t, roaring::Roaring> &bitmaps);
 	//! Wrap a `deletion-vector-v1` blob (from ToBlob) in a spec-compliant Puffin file
 	//! container: leading magic + blob + footer. The blob is placed at offset 4 (right
