@@ -449,7 +449,7 @@ void IcebergMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFi
 	if (diff > 0) {
 		int32_t start = input_chunk.ColumnCount() - diff;
 		for (int32_t i = 0; i < diff; i++) {
-			output_chunk.data.emplace_back(input_chunk.data[start + i]);
+			output_chunk.data.emplace_back(Vector::Ref(input_chunk.data[start + i]));
 		}
 	}
 
