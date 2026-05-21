@@ -393,6 +393,7 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
 	filtered_list->names = names;
 	filtered_list->types = types;
 	filtered_list->have_bound = true;
+	filtered_list->need_sort = need_sort;
 	return filtered_list;
 }
 
@@ -450,6 +451,9 @@ vector<OpenFileInfo> IcebergMultiFileList::GetAllFiles() const {
 	vector<OpenFileInfo> file_list;
 	//! Lock is required because it reads the 'manifest_entries' vector
 	lock_guard<mutex> guard(shared_state->lock);
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	}
 	for (idx_t i = 0; i < data_manifest_entries.size(); i++) {
 		file_list.push_back(GetFileInternal(i, guard));
 	}
@@ -471,9 +475,13 @@ idx_t IcebergMultiFileList::GetTotalFileCount() const {
 	// in the Manifest List should give us this information without scanning the manifest file(s)
 	lock_guard<mutex> guard(shared_state->lock);
 
-	idx_t i = data_manifest_entries.size();
-	while (!GetFileInternal(i, guard).path.empty()) {
-		i++;
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	} else {
+		idx_t i = data_manifest_entries.size();
+		while (!GetFileInternal(i, guard).path.empty()) {
+			i++;
+		}
 	}
 	return data_manifest_entries.size();
 }
@@ -965,6 +973,20 @@ optional_ptr<const BoundIcebergManifestEntry> IcebergMultiFileList::GetDataFile(
 	return data_manifest_entries[file_id];
 }
 
+void IcebergMultiFileList::EnsureSortedManifestEntries(lock_guard<mutex> &guard) const {
+	if (data_manifest_entries_sorted) {
+		return;
+	}
+	if (!view_initialized) {
+		InitializeFiles(guard);
+	}
+	GetDataFile(NumericLimits<idx_t>::Maximum(), guard);
+	std::sort(data_manifest_entries.begin(), data_manifest_entries.end(), [](const auto &lhs, const auto &rhs) {
+		return lhs.entry->data_file.file_path < rhs.entry->data_file.file_path;
+	});
+	data_manifest_entries_sorted = true;
+}
+
 OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mutex> &guard) const {
 	if (!view_initialized) {
 		InitializeFiles(guard);
@@ -1003,13 +1025,16 @@ OpenFileInfo IcebergMultiFileList::GetFileInternal(idx_t file_id, lock_guard<mut
 	if (bound_manifest_entry.HasFirstRowId()) {
 		extended_info->options["first_row_id"] = Value::BIGINT(bound_manifest_entry.GetFirstRowId());
 	}
-	extended_info->options["sequence_number"] = Value::BIGINT(manifest_entry.GetSequenceNumber(manifest_file));
+	extended_info->options["sequence_number"] = Value::BIGINT(manifest_entry->GetSequenceNumber(manifest_file));
 	res.extended_info = extended_info;
 	return res;
 }
 
 OpenFileInfo IcebergMultiFileList::GetFile(idx_t file_id) const {
 	lock_guard<mutex> guard(shared_state->lock);
+	if (need_sort) {
+		EnsureSortedManifestEntries(guard);
+	}
 	return GetFileInternal(file_id, guard);
 }
 
@@ -1376,7 +1401,7 @@ vector<BoundIcebergManifestEntry> IcebergMultiFileList::GetDeleteManifestEntries
 			continue;
 		}
 		if (table_filters.HasFilters() &&
-		    !FileMatchesFilter(manifest_file, entry.entry, IcebergManifestContentType::DELETE)) {
+		    !FileMatchesFilter(manifest_file, *entry.entry, IcebergManifestContentType::DELETE)) {
 			continue;
 		}
 		result.push_back(entry);
@@ -1458,8 +1483,8 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
 			result.Reset();
 			delete_scan_function.function(context, function_input, result);
 			result.Flatten();
-			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.job.reader->columns, global_columns,
-			                       global_column_ids, projection_ids);
+			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.job.reader->columns,
+			                       global_columns, global_column_ids, projection_ids);
 		} while (result.size() != 0);
 	}
 }

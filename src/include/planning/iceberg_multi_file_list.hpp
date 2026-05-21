@@ -156,6 +156,7 @@ public:
 	IcebergTableEntry *GetTable() const;
 	void SetTable(IcebergTableEntry *table);
 	void SetOptions(const IcebergOptions &options);
+	bool need_sort = false;
 
 	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
 	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
@@ -226,6 +227,7 @@ private:
 	                            const vector<ColumnIndex> &global_column_ids,
 	                            const vector<idx_t> &projection_ids) const;
 	void ScanPuffinFile(const BoundIcebergManifestEntry &entry) const;
+	void EnsureSortedManifestEntries(lock_guard<mutex> &guard) const;
 
 private:
 	shared_ptr<IcebergMultiFileListSharedState> shared_state;
@@ -247,6 +249,8 @@ private:
 private:
 	//! References to items inside the 'manifest_entries' of the list entries in the 'data_manifests'
 	mutable vector<BoundIcebergManifestEntry> data_manifest_entries;
+	//! Set once `data_manifest_entries` has been fully populated and sorted by file path.
+	mutable bool data_manifest_entries_sorted = false;
 	//! Combination of committed + transaction data manifests
 	mutable vector<BoundIcebergManifestListEntry> data_manifests;
 	mutable vector<bool> data_manifest_matches;
