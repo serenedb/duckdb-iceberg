@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> IcebergBucketBind(BindScalarFunctionInput &input
 	D_ASSERT(arguments.size() == 2);
 	auto &num_buckets_expr = *arguments[0];
 	if (num_buckets_expr.IsFoldable()) {
-		auto num_buckets_val = ExpressionExecutor::EvaluateScalar(context, num_buckets_expr);
+		auto num_buckets_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), num_buckets_expr);
 		if (!num_buckets_val.IsNull() && num_buckets_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_bucket: modulo must be a positive integer, got %d",
 			                            num_buckets_val.GetValue<int32_t>());
@@ -143,7 +143,7 @@ static unique_ptr<FunctionData> IcebergBucketDecimalBind(BindScalarFunctionInput
 	D_ASSERT(arguments.size() == 2);
 	auto &num_buckets_expr = *arguments[0];
 	if (num_buckets_expr.IsFoldable()) {
-		auto num_buckets_val = ExpressionExecutor::EvaluateScalar(context, num_buckets_expr);
+		auto num_buckets_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), num_buckets_expr);
 		if (!num_buckets_val.IsNull() && num_buckets_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_bucket: modulo must be a positive integer, got %d",
 			                            num_buckets_val.GetValue<int32_t>());
@@ -216,7 +216,7 @@ static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &inp
 	D_ASSERT(arguments.size() == 2);
 	auto &width_expr = *arguments[0];
 	if (width_expr.IsFoldable()) {
-		auto width_val = ExpressionExecutor::EvaluateScalar(context, width_expr);
+		auto width_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), width_expr);
 		if (!width_val.IsNull() && width_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d",
 			                            width_val.GetValue<int32_t>());
@@ -297,7 +297,7 @@ static unique_ptr<FunctionData> IcebergTruncateDecimalBind(BindScalarFunctionInp
 	D_ASSERT(arguments.size() == 2);
 	auto &width_expr = *arguments[0];
 	if (width_expr.IsFoldable()) {
-		auto width_val = ExpressionExecutor::EvaluateScalar(context, width_expr);
+		auto width_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), width_expr);
 		if (!width_val.IsNull() && width_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d",
 			                            width_val.GetValue<int32_t>());
