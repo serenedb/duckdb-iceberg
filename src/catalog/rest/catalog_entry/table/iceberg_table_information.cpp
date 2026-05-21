@@ -618,7 +618,7 @@ IcebergTableMetadata IcebergTableInformation::CreateMetadataFromLog(ClientContex
 	if (!log_item_index.IsValid()) {
 		throw InternalException(
 		    "Metadata-log exists but none of the entries were valid for the current transaction start time (%s)",
-		    Timestamp::ToString(timestamp_ms_t(transaction_start_millis)));
+		    Timestamp::ToString(Timestamp::FromEpochMs(transaction_start_millis)));
 	}
 
 	auto fs = make_shared_ptr<CachingFileSystemWrapper>(FileSystem::GetFileSystem(context), *context.db);
