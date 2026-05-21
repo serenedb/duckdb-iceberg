@@ -26,15 +26,20 @@ IcebergScanPlanner::~IcebergScanPlanner() {
 
 unique_ptr<IcebergScanPlanner> IcebergScanPlanner::CreateView(IcebergTableFilters filters) const {
 	unique_ptr<RowGroupOrderOptions> filtered_scan_order;
+	bool filtered_sort_by_path;
 	{
 		annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
 		shared_state->FreezeConfiguration();
 		filtered_scan_order = scan_order.CopyOptions();
+		filtered_sort_by_path = sort_by_path;
 	}
 	auto result = unique_ptr<IcebergScanPlanner>(new IcebergScanPlanner(shared_state));
 	result->table_filters = std::move(filters);
 	if (filtered_scan_order) {
 		result->SetScanOrder(std::move(filtered_scan_order));
+	}
+	if (filtered_sort_by_path) {
+		result->SortFilesByPath();
 	}
 	return result;
 }
@@ -93,6 +98,11 @@ void IcebergScanPlanner::SetOptions(const IcebergOptions &new_options) {
 void IcebergScanPlanner::SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options) {
 	annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
 	scan_order.Set(std::move(order_options));
+}
+
+void IcebergScanPlanner::SortFilesByPath() {
+	annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
+	sort_by_path = true;
 }
 
 void IcebergScanPlanner::DisableServerSidePlanning() {
@@ -224,14 +234,36 @@ IcebergScanPlanner::GetDataFile(idx_t file_id, annotated_lock_guard<annotated_mu
 }
 
 void IcebergScanPlanner::EnsureScanOrderApplied(annotated_lock_guard<annotated_mutex> &guard) const {
-	if (!scan_order.IsPending()) {
+	const bool order_pending = scan_order.IsPending();
+	const bool sort_pending = sort_by_path && !sorted_by_path;
+	if (!order_pending && !sort_pending) {
 		return;
 	}
 	idx_t materialized = 0;
 	while (GetDataFile(materialized, guard)) {
 		materialized++;
 	}
-	scan_order.Apply(context, GetSchema(), has_matching_delete_manifests.load(), data_manifest_entries);
+	if (order_pending) {
+		scan_order.Apply(context, GetSchema(), has_matching_delete_manifests.load(), data_manifest_entries);
+	}
+	if (sort_pending) {
+		vector<idx_t> order;
+		order.reserve(data_manifest_entries.size());
+		for (idx_t i = 0; i < data_manifest_entries.size(); i++) {
+			order.push_back(i);
+		}
+		std::sort(order.begin(), order.end(), [&](idx_t lhs, idx_t rhs) {
+			return data_manifest_entries[lhs].entry.data_file.file_path <
+			       data_manifest_entries[rhs].entry.data_file.file_path;
+		});
+		vector<BoundIcebergManifestEntry> sorted;
+		sorted.reserve(order.size());
+		for (auto idx : order) {
+			sorted.push_back(data_manifest_entries[idx]);
+		}
+		data_manifest_entries = std::move(sorted);
+		sorted_by_path = true;
+	}
 }
 
 IcebergDataFileDescriptor IcebergScanPlanner::CreateDataFileDescriptor(const BoundIcebergManifestEntry &entry) const {
