@@ -3,6 +3,7 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 #include "catalog_entry/schema/iceberg_schema_entry.hpp"
 
@@ -17,8 +18,8 @@ public:
 	void LoadEntries(ClientContext &context);
 	optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
-	const case_insensitive_map_t<unique_ptr<CatalogEntry>> &GetEntries();
-	void AddEntry(const string &name, unique_ptr<IcebergSchemaEntry> entry);
+	const case_insensitive_map_t<shared_ptr<CatalogEntry>> &GetEntries();
+	void AddEntry(const string &name, shared_ptr<IcebergSchemaEntry> entry);
 	void RemoveEntry(const string &name);
 	CatalogEntry &GetEntry(const string &name);
 
@@ -29,7 +30,7 @@ public:
 	Catalog &catalog;
 
 private:
-	case_insensitive_map_t<unique_ptr<CatalogEntry>> entries;
+	case_insensitive_map_t<shared_ptr<CatalogEntry>> entries;
 	mutex entry_lock;
 };
 

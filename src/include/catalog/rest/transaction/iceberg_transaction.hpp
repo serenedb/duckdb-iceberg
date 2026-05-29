@@ -2,6 +2,7 @@
 #pragma once
 
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "catalog/rest/iceberg_schema_set.hpp"
 
 namespace duckdb {
@@ -74,6 +75,8 @@ public:
 	void Commit();
 	void Rollback();
 	static IcebergTransaction &Get(ClientContext &context, Catalog &catalog);
+	optional_ptr<CatalogEntry> ReferenceSchema(shared_ptr<CatalogEntry> &entry);
+	IcebergTableInformation &ReferenceTable(shared_ptr<IcebergTableInformation> &entry);
 	AccessMode GetAccessMode() const {
 		return access_mode;
 	}
@@ -109,8 +112,12 @@ private:
 	AccessMode access_mode;
 
 public:
+	//! Schemas referenced by this transaction that have to stay alive for the duration of the transaction.
+	reference_map_t<CatalogEntry, shared_ptr<CatalogEntry>> schemas;
 	//! Tables referenced by this transaction that have to stay alive for the duration of the transaction.
-	case_insensitive_map_t<shared_ptr<IcebergTableInformation>> tables;
+	//! Keyed by object identity so a referenced IcebergTableInformation is never evicted while another thread
+	//! still holds a raw CatalogEntry reference into its dummy_entry/schema_versions.
+	reference_map_t<IcebergTableInformation, shared_ptr<IcebergTableInformation>> tables;
 	vector<unique_ptr<IcebergTransactionUpdate>> transaction_updates;
 	//! The latest state of a table (either points into 'transaction_updates' or 'tables')
 	case_insensitive_map_t<IcebergTransactionTableState> current_table_data;
