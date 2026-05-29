@@ -31,7 +31,7 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
 	if (iceberg_transaction.created_schemas.count(name)) {
 		auto entry = entries.find(name);
 		if (entry != entries.end()) {
-			return entry->second.get();
+			return iceberg_transaction.ReferenceSchema(entry->second).get();
 		}
 		throw InternalException("Schema '%s' was created in this transaction, but was no found in the local cache",
 		                        name);
@@ -42,7 +42,7 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
 	if (entry != entries.end()) {
 		auto &iceberg_schema_entry = entry->second->Cast<IcebergSchemaEntry>();
 		if (iceberg_schema_entry.DoesExist()) {
-			return entry->second.get();
+			return iceberg_transaction.ReferenceSchema(entry->second).get();
 		}
 		return nullptr;
 	}
@@ -74,22 +74,23 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
 		entry = entries.find(name);
 		D_ASSERT(entry != entries.end());
 	}
-	return entry->second.get();
+	return iceberg_transaction.ReferenceSchema(entry->second).get();
 }
 
 void IcebergSchemaSet::Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	lock_guard<mutex> l(entry_lock);
 	LoadEntries(context);
+	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
 	for (auto &entry : entries) {
 		auto &iceberg_schema_entry = entry.second->Cast<IcebergSchemaEntry>();
 		if (iceberg_schema_entry.DoesExist()) {
-			callback(*entry.second);
+			callback(*iceberg_transaction.ReferenceSchema(entry.second));
 		}
 	}
 }
 
-void IcebergSchemaSet::AddEntry(const string &name, unique_ptr<IcebergSchemaEntry> entry) {
-	entries.insert(make_pair(name, std::move(entry)));
+void IcebergSchemaSet::AddEntry(const string &name, shared_ptr<IcebergSchemaEntry> entry) {
+	entries.emplace(name, std::move(entry));
 }
 
 void IcebergSchemaSet::RemoveEntry(const string &name) {
@@ -106,7 +107,7 @@ CatalogEntry &IcebergSchemaSet::GetEntry(const string &name) {
 	return *entry;
 }
 
-const case_insensitive_map_t<unique_ptr<CatalogEntry>> &IcebergSchemaSet::GetEntries() {
+const case_insensitive_map_t<shared_ptr<CatalogEntry>> &IcebergSchemaSet::GetEntries() {
 	return entries;
 }
 

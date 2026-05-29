@@ -39,6 +39,12 @@ IcebergTransaction::IcebergTransaction(IcebergCatalog &ic_catalog, TransactionMa
 
 IcebergTransaction::~IcebergTransaction() = default;
 
+optional_ptr<CatalogEntry> IcebergTransaction::ReferenceSchema(shared_ptr<CatalogEntry> &entry) {
+	auto &ref = *entry;
+	schemas.emplace(ref, entry);
+	return ref;
+}
+
 void IcebergTransaction::Start() {
 }
 
