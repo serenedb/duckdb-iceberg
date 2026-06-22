@@ -4,6 +4,7 @@
 #include "iceberg_schema_information.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/atomic.hpp"
 
 #include "catalog/rest/api/catalog_api.hpp"
 #include "catalog/rest/iceberg_table_set.hpp"
@@ -46,7 +47,7 @@ public:
 	bool HandleCreateConflict(CatalogTransaction &transaction, CatalogType catalog_type, const string &entry_name,
 	                          OnCreateConflict on_conflict);
 	bool DoesExist() const {
-		return exists;
+		return exists.load(std::memory_order_relaxed);
 	}
 	string GetSchemaKey() const {
 		return this->catalog.GetName() + "." + this->name;
@@ -57,7 +58,7 @@ private:
 	IcebergTableSet &GetCatalogSet(CatalogType type);
 	// does the schema actually exist? default is true, but this is set to false
 	// when a verify schema request is made.
-	bool exists;
+	atomic<bool> exists;
 
 public:
 	IcebergTableSet tables;
