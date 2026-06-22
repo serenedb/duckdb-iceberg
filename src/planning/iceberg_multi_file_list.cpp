@@ -358,9 +358,6 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identi
 	}
 
 	QueryResult::DeduplicateColumns(names);
-	for (idx_t i = 0; i < names.size(); i++) {
-		schema[i]->name = names[i].GetIdentifierName();
-	}
 
 	have_bound = true;
 	this->names = IdentifiersToStrings(names);
