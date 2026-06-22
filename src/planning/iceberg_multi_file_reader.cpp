@@ -295,13 +295,16 @@ ReaderInitializeType IcebergMultiFileReader::InitializeReader(MultiFileReaderDat
 
 	//! Add the columns needed by the equality deletes if not present
 	auto new_global_column_ids = global_column_ids;
-	auto &equality_to_result_id = multi_file_list.equality_id_to_result_id;
-	new_global_column_ids.resize(global_column_ids.size() + equality_to_result_id.size());
+	{
+		lock_guard<mutex> guard(multi_file_list.lock);
+		auto &equality_to_result_id = multi_file_list.equality_id_to_result_id;
+		new_global_column_ids.resize(global_column_ids.size() + equality_to_result_id.size());
 
-	for (auto it : equality_to_result_id) {
-		auto global_column_id = id_to_global_column[it.first];
-		ColumnIndex equality_index(global_column_id);
-		new_global_column_ids[it.second] = equality_index;
+		for (auto it : equality_to_result_id) {
+			auto global_column_id = id_to_global_column[it.first];
+			ColumnIndex equality_index(global_column_id);
+			new_global_column_ids[it.second] = equality_index;
+		}
 	}
 
 	return CreateMapping(context, reader_data, global_columns, new_global_column_ids, table_filters, gstate.file_list,
@@ -463,10 +466,12 @@ void IcebergMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFi
 	D_ASSERT(global_state);
 	// Get the metadata for this file
 	auto file_id = reader.file_list_idx.GetIndex();
-	auto &bound_manifest_entry = multi_file_list.GetManifestEntry(file_id);
-
-	auto &local_columns = reader.columns;
-	ApplyEqualityDeletes(context, output_chunk, multi_file_list, bound_manifest_entry, local_columns);
+	{
+		lock_guard<mutex> guard(multi_file_list.lock);
+		auto &bound_manifest_entry = multi_file_list.GetManifestEntry(file_id);
+		auto &local_columns = reader.columns;
+		ApplyEqualityDeletes(context, output_chunk, multi_file_list, bound_manifest_entry, local_columns);
+	}
 
 	//! Remove the extra columns we added to perform the equality delete filtering
 	for (idx_t i = 0; i < diff; i++) {
