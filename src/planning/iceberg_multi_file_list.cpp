@@ -69,9 +69,6 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identi
 		return_types.push_back(schema_entry->type);
 	}
 	QueryResult::DeduplicateColumns(names);
-	for (idx_t i = 0; i < names.size(); i++) {
-		planner->GetSchema().columns[i]->name = names[i].GetIdentifierName();
-	}
 	have_bound = true;
 	this->names = IdentifiersToStrings(names);
 	types = return_types;
