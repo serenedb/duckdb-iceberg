@@ -231,7 +231,7 @@ bool IcebergTableSecretProvider::SupportsStorageType(const string &storage_type)
 
 unique_ptr<BaseSecret> IcebergTableSecretProvider::CreateSecret(ClientContext &context, CreateSecretInput &input) {
 	if (input.options.find("catalog_name") != input.options.end()) {
-		DUCKDB_LOG_INFO(context, "Refreshing Iceberg vended credentials for secret '%s'", input.name);
+		DUCKDB_LOG_DEBUG(context, "Refreshing Iceberg vended credentials for secret '%s'", input.name);
 		auto revended = ReVendVendedCredentials(context, input);
 		return BuildVendedSecret(revended);
 	}

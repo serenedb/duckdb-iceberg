@@ -629,8 +629,8 @@ void IcebergTable::LoadCredentials(ClientContext &context, IRCAPITableCredential
 		if (metadata_pos != string::npos) {
 			info.scope = {metadata_path.substr(0, metadata_pos)};
 		} else {
-			DUCKDB_LOG_INFO(context, "Creating Iceberg Table secret with no scope. Returned metadata location is %s",
-			                lc_storage_location);
+			DUCKDB_LOG_DEBUG(context, "Creating Iceberg Table secret with no scope. Returned metadata location is %s",
+			                 lc_storage_location);
 		}
 	}
 
@@ -677,7 +677,7 @@ void IcebergTable::LoadCredentials(ClientContext &context, IRCAPITableCredential
 	                       info.options.find("connection_string") != info.options.end();
 	bool has_gcs_creds = info.options.find("bearer_token") != info.options.end();
 	if (!has_s3_creds && !has_azure_creds && !has_gcs_creds) {
-		DUCKDB_LOG_INFO(context, "Failed to create valid secret from Vended Credentials for table '%s'", name);
+		DUCKDB_LOG_DEBUG(context, "Failed to create valid secret from Vended Credentials for table '%s'", name);
 	}
 }
 

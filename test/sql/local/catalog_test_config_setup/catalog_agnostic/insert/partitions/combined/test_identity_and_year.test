@@ -57,7 +57,7 @@ select * from local_combined where category = 'even' and ts >= '2020-01-01'::TIM
 ----
 
 statement ok
-call enable_logging();
+call enable_logging(level='debug');
 
 # Filter on both partition columns
 query III nosort local_result

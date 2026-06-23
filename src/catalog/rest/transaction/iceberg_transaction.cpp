@@ -423,9 +423,8 @@ void RemoveFilesBestEffort(ClientContext &context, FileSystem &fs, const vector<
 		           static_cast<uint64_t>(paths.size()), description);
 	} catch (std::exception &ex) {
 		//! A bulk delete reports one error for the whole batch, so some of these files may well have been removed.
-		DUCKDB_LOG(context, IcebergLogType,
-		           "Iceberg Transaction Cleanup, failed to delete one or more of %llu %s(s): %s",
-		           static_cast<uint64_t>(paths.size()), description, ex.what());
+		DUCKDB_LOG_WARNING(context, "Iceberg Transaction Cleanup, failed to delete one or more of %llu %s(s): %s",
+		                   static_cast<uint64_t>(paths.size()), description, ErrorData(ex).Message());
 	}
 }
 

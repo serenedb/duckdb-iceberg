@@ -59,7 +59,7 @@ select * from my_datalake.default.test_insert_into_partitioned_table_month order
 ----
 
 statement ok
-call enable_logging();
+call enable_logging(level='debug');
 
 query II
 select * from my_datalake.default.test_insert_into_partitioned_table_month where a = '1993-04-20 13:34:27.123456'::TIMESTAMP;

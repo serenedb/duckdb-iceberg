@@ -287,7 +287,7 @@ unique_ptr<Catalog> IcebergAttach::Attach(optional_ptr<StorageExtensionInfo> sto
 		}
 	}
 	if (used_legacy_endpoint) {
-		DUCKDB_LOG_WARNING(context, "The Iceberg attach option 'endpoint' is deprecated; use 'uri' instead");
+		context.WarnUser("The Iceberg attach option 'endpoint' is deprecated; use 'uri' instead");
 	}
 	StringUtil::RTrim(attach_options.catalog_uri, "/");
 	IcebergEndpointType endpoint_type = IcebergEndpointType::INVALID;
