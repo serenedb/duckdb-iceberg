@@ -8,7 +8,7 @@ namespace duckdb {
 
 struct IcebergLogType : public LogType {
 	static constexpr const char *NAME = "Iceberg";
-	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
 
 	//! Construct the log type
 	IcebergLogType();
