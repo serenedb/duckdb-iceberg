@@ -86,9 +86,7 @@ void IcebergTableSet::Scan(ClientContext &context, const std::function<void(Cata
 	auto schema_component = IRCPathComponent::NamespaceComponent(schema.namespace_items);
 	auto table_namespace = schema_component.encoded;
 	for (auto &entry : entries) {
-		auto &table_info = *entry.second;
-		auto table_key = table_info.GetTableKey();
-		iceberg_transaction.tables[table_key] = entry.second;
+		auto &table_info = iceberg_transaction.ReferenceTable(entry.second);
 
 		if (!table_info.schema_versions.empty()) {
 			// The table has already been resolved (e.g. via DESCRIBE or a scan), so its full schema -
@@ -334,7 +332,7 @@ optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, con
 		return nullptr;
 	}
 
-	iceberg_transaction.tables[table_key] = new_version;
+	iceberg_transaction.ReferenceTable(new_version);
 	auto ret = table_info.GetSchemaVersion(context, at);
 	if (!ret) {
 		return nullptr;

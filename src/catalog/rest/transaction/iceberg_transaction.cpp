@@ -45,6 +45,12 @@ optional_ptr<CatalogEntry> IcebergTransaction::ReferenceSchema(shared_ptr<Catalo
 	return ref;
 }
 
+IcebergTableInformation &IcebergTransaction::ReferenceTable(shared_ptr<IcebergTableInformation> &entry) {
+	auto &ref = *entry;
+	tables.emplace(ref, entry);
+	return ref;
+}
+
 void IcebergTransaction::Start() {
 }
 
