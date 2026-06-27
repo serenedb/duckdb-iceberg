@@ -111,21 +111,21 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	}
 
 	// Verify schema existence on the server first
-	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name.GetIdentifierName());
+	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.Name().GetIdentifierName());
 
 	if (!schema_exists) {
 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
 			// remove the entry if it exists locally
 			// it could have been created during the bind phase.
-			GetSchemas().RemoveEntry(info.name.GetIdentifierName());
+			GetSchemas().RemoveEntry(info.Name().GetIdentifierName());
 			return;
 		}
-		throw CatalogException("Schema with name \"%s\" does not exist", info.name);
+		throw CatalogException("Schema with name \"%s\" does not exist", info.Name());
 	}
 
 	// Schema exists - defer the server deletion to commit
 	auto &iceberg_transaction = IcebergTransaction::Get(context, *this);
-	iceberg_transaction.deleted_schemas.insert(info.name.GetIdentifierName());
+	iceberg_transaction.deleted_schemas.insert(info.Name().GetIdentifierName());
 }
 
 unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
