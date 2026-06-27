@@ -221,7 +221,7 @@ IcebergTableInformation &IcebergTableSet::CreateNewEntry(ClientContext &context,
 		               .GetValue<string>();
 	}
 
-	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.table.GetIdentifierName());
+	auto key = IcebergTableInformation::GetTableKey(schema.namespace_items, info.GetTableName().GetIdentifierName());
 	auto &alter_update = iceberg_transaction.GetOrCreateAlter();
 	auto &table_info =
 	    alter_update.CreateTable(key, IcebergTableInformation(catalog, schema, info.table.GetIdentifierName()));
