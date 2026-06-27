@@ -284,7 +284,7 @@ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<Ice
 	auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
 	if (!column_p) {
 		throw CatalogException("Column with name '%s' does not exist on the table '%s'", column_name,
-		                       alter_table_info.GetAlterEntryData().name);
+		                       alter_table_info.GetAlterEntryData().Name());
 	}
 	auto &column = *column_p;
 	return column;
