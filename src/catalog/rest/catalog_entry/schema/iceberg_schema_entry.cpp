@@ -25,7 +25,7 @@
 namespace duckdb {
 
 IcebergSchemaEntry::IcebergSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema.GetIdentifierName())),
+    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.Schema().GetIdentifierName())),
       exists(true), tables(*this) {
 }
 
@@ -88,7 +88,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &t
 	auto &base_info = info.Base();
 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
 	// check if we have an existing entry with this name
-	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table.GetIdentifierName(),
+	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.GetTableName().GetIdentifierName(),
 	                          base_info.on_conflict)) {
 		return nullptr;
 	}
@@ -108,7 +108,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 }
 
 void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool delete_entry) {
-	auto table_name = info.name;
+	auto table_name = info.Name();
 	// find if info has a table name, if so look for it in
 	auto table_info_it = tables.GetEntries().find(table_name.GetIdentifierName());
 	if (table_info_it == tables.GetEntries().end()) {
@@ -284,7 +284,7 @@ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<Ice
 	auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
 	if (!column_p) {
 		throw CatalogException("Column with name '%s' does not exist on the table '%s'", column_name,
-		                       alter_table_info.GetAlterEntryData().name);
+		                       alter_table_info.GetAlterEntryData().Name());
 	}
 	auto &column = *column_p;
 	return column;
@@ -298,10 +298,10 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) 
 	auto &irc_transaction = GetICTransaction(transaction);
 	auto &context = transaction.GetContext();
 
-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, alter_table_info.name);
+	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, alter_table_info.Name());
 	auto catalog_entry = tables.GetEntry(context, lookup);
 	if (!catalog_entry) {
-		throw CatalogException("Table with name \"%s\" does not exist!", alter_table_info.name);
+		throw CatalogException("Table with name \"%s\" does not exist!", alter_table_info.Name());
 	}
 	auto &table_entry = catalog_entry->Cast<IcebergTableEntry>();
 	auto &catalog_table_info = table_entry.table_info;
@@ -340,7 +340,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) 
 
 		auto &last_column_id = updated_table.table_metadata.last_column_id;
 		if (!last_column_id.IsValid()) {
-			throw InternalException("No last_column_id when trying to ADD COLUMN %s", add_column_info.name);
+			throw InternalException("No last_column_id when trying to ADD COLUMN %s", add_column_info.new_column.GetName());
 		}
 		auto field_id = last_column_id.GetIndex() + 1;
 		auto next_field_id = [&field_id]() -> idx_t {

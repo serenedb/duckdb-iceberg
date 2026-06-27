@@ -417,7 +417,7 @@ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &
 	// Populate return_types and names from schema
 	for (auto &col : schema) {
 		return_types.push_back(col.type);
-		names.push_back(Identifier(col.name));
+		names.emplace_back(col.name);
 	}
 
 	// Set the schema in bind_data - framework will use this for mapping

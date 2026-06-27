@@ -353,7 +353,7 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identi
 
 	auto &schema = GetSchema().columns;
 	for (auto &schema_entry : schema) {
-		names.push_back(Identifier(schema_entry->name));
+		names.emplace_back(schema_entry->name);
 		return_types.push_back(schema_entry->type);
 	}
 
@@ -1458,7 +1458,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
 			result.Reset();
 			delete_scan_function.function(context, function_input, result);
 			result.Flatten();
-			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.reader->columns, global_columns,
+			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.job.reader->columns, global_columns,
 			                       global_column_ids, projection_ids);
 		} while (result.size() != 0);
 	}

@@ -283,7 +283,7 @@ static Value CreateFieldID(int32_t field_id, bool nullable) {
 
 static void AddSimpleColumn(AvroBindSchemaMetadata &metadata, const string &name, const LogicalType &type,
                             int32_t field_id, bool nullable) {
-	metadata.names.push_back(Identifier(name));
+	metadata.names.emplace_back(name);
 	metadata.types.push_back(type);
 	metadata.field_ids.emplace_back(name, CreateFieldID(field_id, nullable));
 }

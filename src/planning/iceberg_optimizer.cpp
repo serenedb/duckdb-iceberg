@@ -94,7 +94,7 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
 
 				// modify the multi file reader bind data to add the extra column
 				mfbd.types.push_back(col_type);
-				mfbd.names.push_back(Identifier(col_info->name));
+				mfbd.names.emplace_back(col_info->name);
 
 				auto new_col = col_info->GetMultiFileColumnDefinition();
 				if (!new_col.default_expression) {

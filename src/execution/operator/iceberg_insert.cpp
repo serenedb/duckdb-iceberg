@@ -489,7 +489,7 @@ InsertionOrderPreservingMap<string> IcebergInsert::ParamsToString() const {
 	if (table) {
 		result["Table Name"] = table->name.GetIdentifierName();
 	} else if (info) {
-		result["Table Name"] = info->Base().table.GetIdentifierName();
+		result["Table Name"] = info->Base().GetTableName().GetIdentifierName();
 	} else if (create_state) {
 		lock_guard<mutex> guard(create_state->lock);
 		if (create_state->table_entry) {
@@ -721,7 +721,7 @@ static void GeneratePartitionExpressions(ClientContext &context, const IcebergCo
 		partition_columns.push_back(partition_column_start++);
 
 		auto expr = GetPartitionExpression(context, copy_input, field);
-		projection_names.push_back(Identifier(field.GetPartitionSpecFieldName()));
+		projection_names.emplace_back(field.GetPartitionSpecFieldName());
 		projection_types.push_back(expr->GetReturnType());
 		projection_expressions.push_back(std::move(expr));
 	}
