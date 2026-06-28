@@ -548,7 +548,7 @@ bool IcebergAvroMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &
 // Manifests, and does not happen in any other reads
 static void FixSamePhysicalTypeCasts(BoundCastInfo &cast_info, const LogicalType &source_type,
                                      const LogicalType &target_type) {
-	if (source_type.id() == LogicalTypeId::DATE && target_type.id() == LogicalTypeId::INTEGER) {
+	if (cast_info.IsNullCast() && source_type.InternalType() == target_type.InternalType()) {
 		cast_info.SetFunction(DefaultCasts::ReinterpretCast);
 		return;
 	}
