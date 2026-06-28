@@ -156,6 +156,7 @@ public:
 	IcebergTableEntry *GetTable() const;
 	void SetTable(IcebergTableEntry *table);
 	void SetOptions(const IcebergOptions &options);
+	bool need_sort = false;
 
 	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
 	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
@@ -238,8 +239,6 @@ private:
 	vector<string> names;
 	vector<LogicalType> types;
 	IcebergTableFilters table_filters;
-
-	bool need_sort = false;
 
 	mutable bool view_initialized = false;
 	mutable IcebergDataViewCursor data_view_cursor;

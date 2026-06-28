@@ -1398,7 +1398,7 @@ vector<BoundIcebergManifestEntry> IcebergMultiFileList::GetDeleteManifestEntries
 			continue;
 		}
 		if (table_filters.HasFilters() &&
-		    !FileMatchesFilter(manifest_file, entry.entry, IcebergManifestContentType::DELETE)) {
+		    !FileMatchesFilter(manifest_file, *entry.entry, IcebergManifestContentType::DELETE)) {
 			continue;
 		}
 		result.push_back(entry);
