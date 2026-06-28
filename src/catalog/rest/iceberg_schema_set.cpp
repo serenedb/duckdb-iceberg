@@ -142,7 +142,7 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::CreateEntryInternal(ClientContext &
 	if (result->name.empty()) {
 		throw InternalException("IcebergSchemaSet::CreateEntry called with empty name");
 	}
-	entries.insert(make_pair(result->name, std::move(entry)));
+	entries.insert(make_pair(result->name.GetIdentifierName(), std::move(entry)));
 	return result;
 }
 

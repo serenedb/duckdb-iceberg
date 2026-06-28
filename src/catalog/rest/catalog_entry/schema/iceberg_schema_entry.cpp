@@ -25,7 +25,7 @@
 namespace duckdb {
 
 IcebergSchemaEntry::IcebergSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.schema.GetIdentifierName())),
+    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.GetQualifiedName().Schema().GetIdentifierName())),
       exists(true), tables(*this) {
 }
 
@@ -88,7 +88,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &t
 	auto &base_info = info.Base();
 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
 	// check if we have an existing entry with this name
-	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.table.GetIdentifierName(),
+	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.GetQualifiedName().Name().GetIdentifierName(),
 	                          base_info.on_conflict)) {
 		return nullptr;
 	}
