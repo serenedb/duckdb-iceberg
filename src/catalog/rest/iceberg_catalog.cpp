@@ -78,12 +78,14 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
 	D_ASSERT(context);
 
 	// Verify schema existence on the server first
-	bool schema_exists = IRCAPI::VerifySchemaExistence(*context, *this, info.GetQualifiedName().Schema().GetIdentifierName());
+	bool schema_exists =
+	    IRCAPI::VerifySchemaExistence(*context, *this, info.GetQualifiedName().Schema().GetIdentifierName());
 
 	if (schema_exists) {
 		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			// Schema already exists on the server - get or create a local entry and return it
-			auto entry = schemas.GetEntry(*context, info.GetQualifiedName().Schema().GetIdentifierName(), OnEntryNotFound::RETURN_NULL);
+			auto entry = schemas.GetEntry(*context, info.GetQualifiedName().Schema().GetIdentifierName(),
+			                              OnEntryNotFound::RETURN_NULL);
 			if (entry) {
 				return entry;
 			}
@@ -111,7 +113,8 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	}
 
 	// Verify schema existence on the server first
-	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.GetQualifiedName().Name().GetIdentifierName());
+	bool schema_exists =
+	    IRCAPI::VerifySchemaExistence(context, *this, info.GetQualifiedName().Name().GetIdentifierName());
 
 	if (!schema_exists) {
 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {

@@ -25,8 +25,9 @@
 namespace duckdb {
 
 IcebergSchemaEntry::IcebergSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info), namespace_items(IRCAPI::ParseSchemaName(info.GetQualifiedName().Schema().GetIdentifierName())),
-      exists(true), tables(*this) {
+    : SchemaCatalogEntry(catalog, info),
+      namespace_items(IRCAPI::ParseSchemaName(info.GetQualifiedName().Schema().GetIdentifierName())), exists(true),
+      tables(*this) {
 }
 
 IcebergSchemaEntry::~IcebergSchemaEntry() {
@@ -81,16 +82,15 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
 optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &transaction, ClientContext &context,
                                                            BoundCreateTableInfo &info) {
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
-	if (!exists.load(std::memory_order_relaxed) &&
-	    iceberg_transaction.created_schemas.find(name.GetIdentifierName()) ==
-	        iceberg_transaction.created_schemas.end()) {
+	if (!exists.load(std::memory_order_relaxed) && iceberg_transaction.created_schemas.find(name.GetIdentifierName()) ==
+	                                                   iceberg_transaction.created_schemas.end()) {
 		throw InvalidInputException("Schema with name \"%s\" does not exist", name);
 	}
 	auto &base_info = info.Base();
 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
 	// check if we have an existing entry with this name
-	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY, base_info.GetQualifiedName().Name().GetIdentifierName(),
-	                          base_info.on_conflict)) {
+	if (!HandleCreateConflict(transaction, CatalogType::TABLE_ENTRY,
+	                          base_info.GetQualifiedName().Name().GetIdentifierName(), base_info.on_conflict)) {
 		return nullptr;
 	}
 
@@ -341,7 +341,8 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) 
 
 		auto &last_column_id = updated_table.table_metadata.last_column_id;
 		if (!last_column_id.IsValid()) {
-			throw InternalException("No last_column_id when trying to ADD COLUMN %s", add_column_info.GetQualifiedName().Name());
+			throw InternalException("No last_column_id when trying to ADD COLUMN %s",
+			                        add_column_info.GetQualifiedName().Name());
 		}
 		auto field_id = last_column_id.GetIndex() + 1;
 		auto next_field_id = [&field_id]() -> idx_t {
