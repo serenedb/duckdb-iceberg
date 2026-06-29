@@ -259,7 +259,7 @@ rest_api_objects::StructField IcebergTypeHelper::CreateIcebergRestType(const str
 
 	case_insensitive_map_t<reference<const Value>> child_defaults;
 	if (!default_val.IsNull() && type.id() != LogicalTypeId::STRUCT) {
-		result.initial_default = std::move(IcebergTypeHelper::PrimitiveTypeFromValue(default_val));
+		result.initial_default = IcebergTypeHelper::PrimitiveTypeFromValue(default_val);
 	}
 	auto &rest_type = *result.type;
 
