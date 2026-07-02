@@ -197,14 +197,13 @@ string IcebergUtils::GetFullPath(const string &iceberg_path, const string &relat
 		return fs.JoinPath(iceberg_path, relative_file_path.substr(found + 1));
 	}
 
-	if (StringUtil::StartsWith(lpath, "data")) {
-		found = 0;
-	} else {
-		found = lpath.rfind("/data/") + 1;
+	found = lpath.rfind("/data/");
+	if (found != string::npos) {
+		return fs.JoinPath(iceberg_path, relative_file_path.substr(found + 1));
 	}
 
-	if (found != string::npos) {
-		return fs.JoinPath(iceberg_path, relative_file_path.substr(found));
+	if (StringUtil::StartsWith(lpath, "data/") || StringUtil::StartsWith(lpath, "metadata/")) {
+		return fs.JoinPath(iceberg_path, relative_file_path);
 	}
 
 	throw InvalidConfigurationException("Could not create full path from Iceberg Path (%s) and the relative path (%s)",
