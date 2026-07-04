@@ -269,6 +269,7 @@ void IcebergTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
                                               LogicalUpdate &update, ClientContext &context) {
 	// all updates in DuckDB-Iceberg are deletes + inserts
 	update.update_is_del_and_insert = true;
+	update.update_column_count = 0;
 
 	// FIXME: this is almost a copy of LogicalUpdate::BindExtraColumns aside from the duplicate elimination
 	// add that to main DuckDB
