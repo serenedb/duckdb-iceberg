@@ -87,7 +87,6 @@ public:
 	void DoSchemaDeletes(ClientContext &context);
 	void DoSchemaPropertyUpdates(ClientContext &context);
 	IcebergCatalog &GetCatalog();
-	void DropSecrets();
 	TableTransactionInfo GetTransactionRequest(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
 	void DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
 	void DoSingleTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
@@ -129,7 +128,6 @@ public:
 	//! Set of schemas that this transaction has listed tables for
 	case_insensitive_set_t listed_schemas;
 
-	case_insensitive_set_t created_secrets;
 	case_insensitive_set_t looked_up_entries;
 	mutex lock;
 

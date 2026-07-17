@@ -148,24 +148,6 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
 	return req;
 }
 
-void IcebergTransaction::DropSecrets() {
-	case_insensitive_set_t to_drop;
-	{
-		lock_guard<mutex> guard(lock);
-		to_drop.swap(created_secrets);
-	}
-	if (to_drop.empty()) {
-		return;
-	}
-	Connection temp_con(db);
-	temp_con.BeginTransaction();
-	auto &secret_manager = SecretManager::Get(*temp_con.context);
-	for (auto &secret_name : to_drop) {
-		secret_manager.DropSecretByName(*temp_con.context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
-	}
-	temp_con.Commit();
-}
-
 static rest_api_objects::TableUpdate CreateSetSnapshotRefUpdate(int64_t snapshot_id) {
 	rest_api_objects::TableUpdate table_update;
 
