@@ -266,7 +266,7 @@ static bool MatchBoundsExpression(ClientContext &context, const unique_ptr<Expre
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		if (stats.geometry_stats) {
-			auto result = GeometryStats::CheckZonemap(*stats.geometry_stats, expr_p);
+			auto result = GeometryStats::CheckZonemap(*stats.geometry_stats, expr);
 			return result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
