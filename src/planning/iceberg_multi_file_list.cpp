@@ -1144,12 +1144,20 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 					continue;
 				}
 				D_ASSERT(file.partition_info.size() == data_file.partition_info.size());
+				// SereneDB fork: the mismatch `continue` above this fix targeted the
+				// component loop, so mismatched files fell through to emplace_back --
+				// partition-scoped equality deletes leaked into sibling partitions.
+				bool partition_matches = true;
 				for (idx_t i = 0; i < file.partition_info.size(); i++) {
 					if (file.partition_info[i] != data_file.partition_info[i]) {
 						//! Same partition spec id, but the partitioning information doesn't match, delete file doesn't
 						//! apply.
-						continue;
+						partition_matches = false;
+						break;
 					}
+				}
+				if (!partition_matches) {
+					continue;
 				}
 			}
 			result.emplace_back(file);
@@ -1375,6 +1383,16 @@ void IcebergMultiFileList::ScanDeleteFiles(const vector<MultiFileColumnDefinitio
 		auto &bound_manifest_entry = shared_state->delete_manifest_entries[shared_state->next_delete_entry_to_process];
 		auto &manifest_entry = bound_manifest_entry.entry;
 		auto &data_file = manifest_entry->data_file;
+		if (global_columns.empty() &&
+		    data_file.content == IcebergManifestEntryContentType::EQUALITY_DELETES) {
+			// SereneDB fork: a metadata-only caller (empty bound columns) cannot
+			// parse an equality delete -- the projection would map by operator[]
+			// into empty maps. Skip instead of corrupting state; note the skipped
+			// entry stays behind the shared cursor, so a list processed this way
+			// must never serve a data scan afterwards. No SereneDB caller passes
+			// empty columns today (REINDEX observe forwards its bind's columns).
+			continue;
+		}
 		if (StringUtil::CIEquals(data_file.file_format, "parquet")) {
 			ScanDeleteFile(bound_manifest_entry, global_columns, global_column_ids, projection_ids);
 		} else if (StringUtil::CIEquals(data_file.file_format, "puffin")) {
