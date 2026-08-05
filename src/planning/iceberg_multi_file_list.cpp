@@ -1124,6 +1124,13 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
 
 vector<reference<const IcebergEqualityDeleteFile>>
 IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry) const {
+	return GetEqualityDeletesForFile(bound_manifest_entry, NumericLimits<sequence_number_t>::Minimum());
+}
+
+//! SereneDB fork: bounded variant -- only deletes strictly above 'after_sequence_number'.
+vector<reference<const IcebergEqualityDeleteFile>>
+IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry,
+                                                sequence_number_t after_sequence_number) const {
 	lock_guard<mutex> guard(shared_state->delete_lock);
 	vector<reference<const IcebergEqualityDeleteFile>> result;
 
@@ -1132,7 +1139,8 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
 	auto &data_file = manifest_entry->data_file;
 	auto &metadata = GetMetadata();
-	auto it = shared_state->equality_delete_data.upper_bound(manifest_entry->GetSequenceNumber(manifest_file));
+	auto it = shared_state->equality_delete_data.upper_bound(
+	    MaxValue<sequence_number_t>(manifest_entry->GetSequenceNumber(manifest_file), after_sequence_number));
 	for (; it != shared_state->equality_delete_data.end(); it++) {
 		auto &files = it->second->files;
 		for (auto &file : files) {
