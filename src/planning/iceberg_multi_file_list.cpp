@@ -394,6 +394,22 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
 	return filtered_list;
 }
 
+unique_ptr<MultiFileList> IcebergMultiFileList::NarrowToDataFiles(const vector<string> &data_file_paths) const {
+	auto narrowed = unique_ptr<IcebergMultiFileList>(new IcebergMultiFileList(shared_state));
+
+	IcebergTableFilters result_filter_set;
+	for (auto &entry : table_filters) {
+		result_filter_set.PushFilter(entry.first, entry.second->Copy());
+	}
+	narrowed->table_filters = std::move(result_filter_set);
+	narrowed->names = names;
+	narrowed->types = types;
+	narrowed->have_bound = have_bound;
+	narrowed->need_sort = need_sort;
+	narrowed->only_data_files.insert(data_file_paths.begin(), data_file_paths.end());
+	return std::move(narrowed);
+}
+
 unique_ptr<MultiFileList>
 IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                             const vector<Identifier> &names, const vector<LogicalType> &types,
@@ -943,6 +959,12 @@ optional_ptr<const BoundIcebergManifestEntry> IcebergMultiFileList::GetDataFile(
 			shared_state->data_file_partition_info[data_file.file_path] = data_file.partition_info;
 
 			if (manifest_entry.status == IcebergManifestEntryStatusType::DELETED) {
+				continue;
+			}
+
+			//! SereneDB fork (NarrowToDataFiles): only the listed data files survive.
+			if (!only_data_files.empty() && !only_data_files.count(data_file.file_path) &&
+			    !only_data_files.count(entry_path)) {
 				continue;
 			}
 
