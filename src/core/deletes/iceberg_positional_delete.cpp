@@ -36,6 +36,9 @@ void IcebergMultiFileList::ScanPositionalDeleteFile(const BoundIcebergManifestEn
 	if (count == 0) {
 		return;
 	}
+	//! SereneDB fork: tag rows with the delete file's sequence number.
+	const auto sequence_number =
+	    bound_entry.entry->GetSequenceNumber(GetManifestFileForEntry(bound_entry, IcebergManifestContentType::DELETE));
 	reference<const string_t> current_file_path = names[0];
 	auto initial_key = current_file_path.get().GetString();
 	auto deletes = TryGetOrCreate(shared_state->positional_delete_data, bound_entry, initial_key);
@@ -52,7 +55,7 @@ void IcebergMultiFileList::ScanPositionalDeleteFile(const BoundIcebergManifestEn
 		if (!deletes) {
 			continue;
 		}
-		deletes->AddRow(row_id);
+		deletes->AddRow(row_id, sequence_number);
 	}
 }
 
