@@ -394,6 +394,22 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
 	return filtered_list;
 }
 
+unique_ptr<MultiFileList> IcebergMultiFileList::NarrowToDataFiles(const vector<string> &data_file_paths) const {
+	auto narrowed = unique_ptr<IcebergMultiFileList>(new IcebergMultiFileList(shared_state));
+
+	IcebergTableFilters result_filter_set;
+	for (auto &entry : table_filters) {
+		result_filter_set.PushFilter(entry.first, entry.second->Copy());
+	}
+	narrowed->table_filters = std::move(result_filter_set);
+	narrowed->names = names;
+	narrowed->types = types;
+	narrowed->have_bound = have_bound;
+	narrowed->need_sort = need_sort;
+	narrowed->only_data_files.insert(data_file_paths.begin(), data_file_paths.end());
+	return std::move(narrowed);
+}
+
 unique_ptr<MultiFileList>
 IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                             const vector<Identifier> &names, const vector<LogicalType> &types,
@@ -946,6 +962,12 @@ optional_ptr<const BoundIcebergManifestEntry> IcebergMultiFileList::GetDataFile(
 				continue;
 			}
 
+			//! SereneDB fork (NarrowToDataFiles): only the listed data files survive.
+			if (!only_data_files.empty() && !only_data_files.count(data_file.file_path) &&
+			    !only_data_files.count(entry_path)) {
+				continue;
+			}
+
 			// Check whether current data file is filtered out.
 			if (table_filters.HasFilters() &&
 			    !FileMatchesFilter(manifest_file, manifest_entry, IcebergManifestContentType::DATA)) {
@@ -1102,6 +1124,13 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
 
 vector<reference<const IcebergEqualityDeleteFile>>
 IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry) const {
+	return GetEqualityDeletesForFile(bound_manifest_entry, NumericLimits<sequence_number_t>::Minimum());
+}
+
+//! SereneDB fork: bounded variant -- only deletes strictly above 'after_sequence_number'.
+vector<reference<const IcebergEqualityDeleteFile>>
+IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry,
+                                                sequence_number_t after_sequence_number) const {
 	lock_guard<mutex> guard(shared_state->delete_lock);
 	vector<reference<const IcebergEqualityDeleteFile>> result;
 
@@ -1110,7 +1139,8 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
 	auto &data_file = manifest_entry->data_file;
 	auto &metadata = GetMetadata();
-	auto it = shared_state->equality_delete_data.upper_bound(manifest_entry->GetSequenceNumber(manifest_file));
+	auto it = shared_state->equality_delete_data.upper_bound(
+	    MaxValue<sequence_number_t>(manifest_entry->GetSequenceNumber(manifest_file), after_sequence_number));
 	for (; it != shared_state->equality_delete_data.end(); it++) {
 		auto &files = it->second->files;
 		for (auto &file : files) {
@@ -1122,12 +1152,20 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 					continue;
 				}
 				D_ASSERT(file.partition_info.size() == data_file.partition_info.size());
+				// SereneDB fork: the mismatch `continue` above this fix targeted the
+				// component loop, so mismatched files fell through to emplace_back --
+				// partition-scoped equality deletes leaked into sibling partitions.
+				bool partition_matches = true;
 				for (idx_t i = 0; i < file.partition_info.size(); i++) {
 					if (file.partition_info[i] != data_file.partition_info[i]) {
 						//! Same partition spec id, but the partitioning information doesn't match, delete file doesn't
 						//! apply.
-						continue;
+						partition_matches = false;
+						break;
 					}
+				}
+				if (!partition_matches) {
+					continue;
 				}
 			}
 			result.emplace_back(file);
@@ -1353,6 +1391,16 @@ void IcebergMultiFileList::ScanDeleteFiles(const vector<MultiFileColumnDefinitio
 		auto &bound_manifest_entry = shared_state->delete_manifest_entries[shared_state->next_delete_entry_to_process];
 		auto &manifest_entry = bound_manifest_entry.entry;
 		auto &data_file = manifest_entry->data_file;
+		if (global_columns.empty() &&
+		    data_file.content == IcebergManifestEntryContentType::EQUALITY_DELETES) {
+			// SereneDB fork: a metadata-only caller (empty bound columns) cannot
+			// parse an equality delete -- the projection would map by operator[]
+			// into empty maps. Skip instead of corrupting state; note the skipped
+			// entry stays behind the shared cursor, so a list processed this way
+			// must never serve a data scan afterwards. No SereneDB caller passes
+			// empty columns today (REINDEX observe forwards its bind's columns).
+			continue;
+		}
 		if (StringUtil::CIEquals(data_file.file_format, "parquet")) {
 			ScanDeleteFile(bound_manifest_entry, global_columns, global_column_ids, projection_ids);
 		} else if (StringUtil::CIEquals(data_file.file_format, "puffin")) {

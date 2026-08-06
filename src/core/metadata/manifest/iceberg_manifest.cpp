@@ -696,17 +696,27 @@ idx_t WriteToFile(const IcebergTableMetadata &table_metadata, const IcebergManif
 	CopyFunctionBindInput input(copy_info);
 	input.file_extension = "avro";
 
+	//! SereneDB fork: take the written length from the COPY's own statistics --
+	//! re-opening the file for GetFileSize() costs a HEAD round-trip per avro
+	//! on object stores (S3/GCS), twice per commit (manifest + manifest list).
+	CopyFunctionFileStatistics written_stats;
 	{
 		ThreadContext thread_context(context);
 		ExecutionContext execution_context(context, thread_context, nullptr);
 		auto bind_data = copy.copy_to_bind(context, input, names, types);
 
 		auto global_state = copy.copy_to_initialize_global(context, *bind_data, path);
+		if (copy.copy_to_get_written_statistics) {
+			copy.copy_to_get_written_statistics(context, *bind_data, *global_state, written_stats);
+		}
 		auto local_state = copy.copy_to_initialize_local(execution_context, *bind_data);
 
 		copy.copy_to_sink(execution_context, *bind_data, *global_state, *local_state, chunk);
 		copy.copy_to_combine(execution_context, *bind_data, *global_state, *local_state);
 		copy.copy_to_finalize(context, *bind_data, *global_state);
+	}
+	if (copy.copy_to_get_written_statistics) {
+		return written_stats.file_size_bytes;
 	}
 
 	auto file_system = CachingFileSystem::Get(context);

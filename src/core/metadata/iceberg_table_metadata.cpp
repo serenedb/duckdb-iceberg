@@ -242,6 +242,42 @@ string IcebergTableMetadata::PickTableVersion(vector<OpenFileInfo> &found_metada
 	}
 }
 
+
+//! SereneDB fork: version guessing over one metadata-dir listing -- each
+//! version_name_format pattern carries exactly one '*', so a prefix/suffix
+//! match replaces the per-pattern remote Glob (one LIST each on object
+//! stores).
+static string GuessTableVersionFromListing(const vector<OpenFileInfo> &listing, const IcebergOptions &options) {
+	string compression_suffix = "";
+	if (options.metadata_compression_codec == "gzip") {
+		compression_suffix = ".gz";
+	}
+	for (auto try_format : StringUtil::Split(options.version_name_format, ',')) {
+		auto glob_pattern = StringUtil::Format(try_format, "*", compression_suffix);
+		auto star = glob_pattern.find('*');
+		if (star == string::npos) {
+			continue;
+		}
+		auto prefix = glob_pattern.substr(0, star);
+		auto suffix = glob_pattern.substr(star + 1);
+		string best;
+		for (const auto &entry : listing) {
+			auto slash = entry.path.find_last_of("/\\");
+			auto name = slash == string::npos ? entry.path : entry.path.substr(slash + 1);
+			if (name.size() >= prefix.size() + suffix.size() && StringUtil::StartsWith(name, prefix) &&
+			    StringUtil::EndsWith(name, suffix) && entry.path > best) {
+				best = entry.path;
+			}
+		}
+		if (!best.empty()) {
+			return best;
+		}
+	}
+	throw InvalidConfigurationException(
+	    "Could not guess Iceberg table version using '%s' compression and format(s): '%s'",
+	    options.metadata_compression_codec, options.version_name_format);
+}
+
 string IcebergTableMetadata::GetMetaDataPath(ClientContext &context, const string &path, FileSystem &fs,
                                              const IcebergOptions &options) {
 	string version_hint;
@@ -277,8 +313,11 @@ string IcebergTableMetadata::GetMetaDataPath(ClientContext &context, const strin
 		    VERSION_GUESSING_CONFIG_VARIABLE);
 	}
 
-	// We are allowed to guess to guess from file paths
-	return GuessTableVersion(meta_path, fs, options);
+	//! SereneDB fork: ONE listing of the metadata dir serves every
+	//! version_name_format pattern -- the stock road paid one LIST per
+	//! pattern (two by default) on every bind of a hint-less table.
+	auto listing = fs.Glob(fs.JoinPath(meta_path, "*"));
+	return GuessTableVersionFromListing(listing, options);
 }
 
 bool IcebergTableMetadata::HasLastColumnId() const {

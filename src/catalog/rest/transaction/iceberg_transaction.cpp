@@ -450,15 +450,17 @@ void IcebergTransaction::DoTableUpdates(IcebergTransactionAlterUpdate &alter_upd
 	}
 	if (CanUseMultiTableCommit(alter_update)) {
 		DoMultiTableCommitUpdates(alter_update, context);
+		//! The multi-table commit endpoint returns no metadata (204), so there is
+		//! nothing to re-prime the cache from -- expire so the next read loads
+		//! fresh. Single-table commits handle their own cache at the commit site.
+		auto &ic_catalog = catalog.Cast<IcebergCatalog>();
+		if (ic_catalog.attach_options.max_table_staleness_micros.IsValid()) {
+			for (auto &it : alter_update.committed_tables) {
+				ic_catalog.table_request_cache.Expire(context, it);
+			}
+		}
 	} else {
 		DoSingleTableCommitUpdates(alter_update, context);
-	}
-
-	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
-	if (ic_catalog.attach_options.max_table_staleness_micros.IsValid()) {
-		for (auto &it : alter_update.committed_tables) {
-			ic_catalog.table_request_cache.Expire(context, it);
-		}
 	}
 	DropSecrets(context);
 }
@@ -524,8 +526,44 @@ void IcebergTransaction::DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate
 	}
 }
 
+//! The single-table commit endpoint responds with a CommitTableResponse: the post-commit
+//! 'metadata-location' + 'metadata', i.e. exactly what a LoadTable of the fresh table would return.
+//! Storing it in the table request cache saves the next transaction's GetTable round-trip; the
+//! caller then skips the cache expiry for tables primed this way.
+static bool TryPrimeTableCacheFromCommitResponse(ClientContext &context, IcebergCatalog &ic_catalog,
+                                                 IcebergTableInformation &table_info, const string &body) {
+	if (body.empty()) {
+		return false;
+	}
+	auto table_key = table_info.GetTableKey();
+	unique_ptr<const rest_api_objects::LoadTableResult> load_result;
+	try {
+		auto doc = ICUtils::APIResultToDoc(body);
+		auto *root = yyjson_doc_get_root(doc.get());
+		if (!root || !yyjson_obj_get(root, "metadata") || !yyjson_obj_get(root, "metadata-location")) {
+			return false;
+		}
+		auto parsed = rest_api_objects::LoadTableResult::FromJSON(root);
+		{
+			//! A CommitTableResponse carries no 'config'; keep the one from the original LoadTable
+			//! response (it can hold storage credentials/overrides the scan paths rely on).
+			lock_guard<mutex> cache_lock(ic_catalog.table_request_cache.Lock());
+			auto cached = ic_catalog.table_request_cache.Get(context, table_key, cache_lock, false);
+			if (cached && !parsed.config && cached->load_table_result->config) {
+				parsed.config = cached->load_table_result->config;
+			}
+		}
+		load_result = make_uniq<const rest_api_objects::LoadTableResult>(std::move(parsed));
+	} catch (std::exception &) {
+		return false;
+	}
+	ic_catalog.table_request_cache.SetOrOverwrite(context, table_key, std::move(load_result));
+	return true;
+}
+
 void IcebergTransaction::DoSingleTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update,
                                                     ClientContext &context) {
+	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	D_ASSERT(catalog.supported_urls.count("POST /v1/{prefix}/namespaces/{namespace}/tables/{table}"));
 	for (auto &entry : alter_update.updated_tables) {
 		auto &table_key = entry.first;
@@ -549,6 +587,10 @@ void IcebergTransaction::DoSingleTableCommitUpdates(IcebergTransactionAlterUpdat
 			                                        transaction_json);
 			if (result.Success()) {
 				alter_update.committed_tables.insert(table_key);
+				if (!TryPrimeTableCacheFromCommitResponse(context, ic_catalog, table_info, result.body) &&
+				    ic_catalog.attach_options.max_table_staleness_micros.IsValid()) {
+					ic_catalog.table_request_cache.Expire(context, table_key);
+				}
 				break;
 			}
 

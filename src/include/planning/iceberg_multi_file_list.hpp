@@ -161,11 +161,22 @@ public:
 	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
 	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
 	                                                  const vector<column_t> &column_indexes) const;
+	//! SereneDB fork: a filtered clone whose enumeration yields exactly the given
+	//! data files (deletes and filters still apply). Used by REINDEX delta passes.
+	unique_ptr<MultiFileList> NarrowToDataFiles(const vector<string> &data_file_paths) const;
+	//! SereneDB fork: when non-empty, the data-file enumeration skips every other file.
+	unordered_set<string> only_data_files;
 	unique_ptr<DeleteFilter> GetPositionalDeletesForFile(const string &file_path) const;
 	void ProcessDeletes(const vector<MultiFileColumnDefinition> &global_columns,
 	                    const vector<ColumnIndex> &global_column_ids, const vector<idx_t> &projection_ids) const;
 	vector<reference<const IcebergEqualityDeleteFile>>
 	GetEqualityDeletesForFile(const BoundIcebergManifestEntry &manifest_entry) const;
+	//! SereneDB fork: bounded variant -- only deletes whose sequence number is
+	//! strictly above 'after_sequence_number' (REINDEX translates only the
+	//! deletes that are NEW since the index last observed the file).
+	vector<reference<const IcebergEqualityDeleteFile>>
+	GetEqualityDeletesForFile(const BoundIcebergManifestEntry &manifest_entry,
+	                          sequence_number_t after_sequence_number) const;
 	void GetStatistics(vector<PartitionStatistics> &result) const;
 	BoundIcebergManifestEntry GetManifestEntry(idx_t file_id) const;
 	vector<IcebergPartitionInfo> GetPartitionInfoForDataFile(const string &file_path) const;
