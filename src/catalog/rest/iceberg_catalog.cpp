@@ -525,6 +525,49 @@ unique_ptr<Catalog> IcebergCatalog::Attach(optional_ptr<StorageExtensionInfo> st
                                            AttachOptions &options) {
 	IcebergAttachOptions attach_options;
 	attach_options.warehouse = info.path;
+
+	//! A config secret can carry ANY attach option, so `ATTACH '' (TYPE ICEBERG,
+	//! SECRET s)` alone fully configures the catalog -- the same shape the other
+	//! connectors use for foreign servers. Explicit attach options win, secret
+	//! fields fill the gaps, and an empty attach path takes the secret's
+	//! 'warehouse'.
+	{
+		string config_secret;
+		string config_secret_key;
+		case_insensitive_set_t explicit_options;
+		for (auto &entry : info.options) {
+			auto lower_name = StringUtil::Lower(entry.first);
+			explicit_options.insert(lower_name);
+			if (lower_name == "secret") {
+				config_secret = entry.second.ToString();
+				config_secret_key = entry.first;
+			}
+		}
+		unique_ptr<SecretEntry> secret_entry;
+		if (!config_secret.empty()) {
+			secret_entry = GetIcebergSecret(context, config_secret);
+		}
+		if (secret_entry) {
+			auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
+			for (auto &field : kv_secret.secret_map) {
+				auto field_name = field.first.GetIdentifierName();
+				if (StringUtil::Lower(field_name) == "warehouse") {
+					if (attach_options.warehouse.empty()) {
+						attach_options.warehouse = field.second.ToString();
+					}
+					continue;
+				}
+				if (!explicit_options.count(field_name)) {
+					info.options.emplace(std::move(field_name), field.second);
+				}
+			}
+			//! Everything the secret carried is inline in the options now; drop
+			//! the 'secret' option itself so the authorization handlers don't
+			//! see both configuration roads at once (they are mutually
+			//! exclusive there).
+			info.options.erase(config_secret_key);
+		}
+	}
 	attach_options.name = name;
 
 	// check if we have a secret provided

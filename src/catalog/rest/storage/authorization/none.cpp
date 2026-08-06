@@ -19,6 +19,10 @@ unique_ptr<IcebergAuthorization> NoneAuthorization::FromAttachOptions(AttachedDa
 		IcebergAuthorization::ParseExtraHttpHeaders(input.options["extra_http_headers"], result->extra_http_headers);
 		input.options.erase("extra_http_headers");
 	}
+	//! A config secret needs no auth road: its fields were merged into the
+	//! attach options already -- consume the reference so the leftover-option
+	//! validation accepts it.
+	input.options.erase("secret");
 
 	return std::move(result);
 }

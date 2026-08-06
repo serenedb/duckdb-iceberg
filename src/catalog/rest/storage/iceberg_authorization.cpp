@@ -35,7 +35,25 @@ IcebergAuthorizationType IcebergAuthorization::TypeFromString(const string &type
 
 void IcebergAuthorization::ParseExtraHttpHeaders(const Value &headers_value,
                                                  unordered_map<string, string> &out_headers) {
-	if (headers_value.IsNull() || headers_value.type().id() != LogicalTypeId::MAP) {
+	if (headers_value.IsNull()) {
+		return;
+	}
+	if (headers_value.type().id() == LogicalTypeId::VARCHAR) {
+		//! The flat 'k=v[,k=v]' form -- config-secret fields are plain strings.
+		for (auto &pair : StringUtil::Split(headers_value.ToString(), ',')) {
+			auto eq = pair.find('=');
+			if (eq == string::npos) {
+				continue;
+			}
+			auto key = pair.substr(0, eq);
+			auto value = pair.substr(eq + 1);
+			StringUtil::Trim(key);
+			StringUtil::Trim(value);
+			out_headers[key] = value;
+		}
+		return;
+	}
+	if (headers_value.type().id() != LogicalTypeId::MAP) {
 		return;
 	}
 
