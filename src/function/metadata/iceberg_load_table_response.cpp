@@ -90,7 +90,7 @@ static unique_ptr<FunctionData> IcebergLoadTableResponseBind(ClientContext &cont
 
 	auto &table_entry = catalog_entry->Cast<IcebergTableEntry>();
 	auto &ic_catalog = table_entry.catalog.Cast<IcebergCatalog>();
-	auto &ic_schema = table_entry.schema.Cast<IcebergSchemaEntry>();
+	auto &ic_schema = table_entry.ParentSchema().Cast<IcebergSchemaEntry>();
 
 	auto ret = make_uniq<IcebergLoadTableResponseBindData>(table_entry, ic_catalog, ic_schema);
 
