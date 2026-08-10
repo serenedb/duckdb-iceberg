@@ -533,14 +533,12 @@ unique_ptr<Catalog> IcebergCatalog::Attach(optional_ptr<StorageExtensionInfo> st
 	//! 'warehouse'.
 	{
 		string config_secret;
-		string config_secret_key;
 		case_insensitive_set_t explicit_options;
 		for (auto &entry : info.options) {
 			auto lower_name = StringUtil::Lower(entry.first);
 			explicit_options.insert(lower_name);
 			if (lower_name == "secret") {
 				config_secret = entry.second.ToString();
-				config_secret_key = entry.first;
 			}
 		}
 		unique_ptr<SecretEntry> secret_entry;
@@ -561,11 +559,6 @@ unique_ptr<Catalog> IcebergCatalog::Attach(optional_ptr<StorageExtensionInfo> st
 					info.options.emplace(std::move(field_name), field.second);
 				}
 			}
-			//! Everything the secret carried is inline in the options now; drop
-			//! the 'secret' option itself so the authorization handlers don't
-			//! see both configuration roads at once (they are mutually
-			//! exclusive there).
-			info.options.erase(config_secret_key);
 		}
 	}
 	attach_options.name = name;
