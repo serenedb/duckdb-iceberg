@@ -166,6 +166,10 @@ public:
 	                    const vector<ColumnIndex> &global_column_ids, const vector<idx_t> &projection_ids) const;
 	vector<reference<const IcebergEqualityDeleteFile>>
 	GetEqualityDeletesForFile(const BoundIcebergManifestEntry &manifest_entry) const;
+	//! Only the deletes whose sequence number is strictly above 'after_sequence_number'.
+	vector<reference<const IcebergEqualityDeleteFile>>
+	GetEqualityDeletesForFile(const BoundIcebergManifestEntry &manifest_entry,
+	                          sequence_number_t after_sequence_number) const;
 	void GetStatistics(vector<PartitionStatistics> &result) const;
 	BoundIcebergManifestEntry GetManifestEntry(idx_t file_id) const;
 	vector<IcebergPartitionInfo> GetPartitionInfoForDataFile(const string &file_path) const;

@@ -231,6 +231,10 @@ IcebergSnapshot IcebergSnapshot::ParseSnapshot(const rest_api_objects::Snapshot 
 	}
 
 	ret.snapshot_id = snapshot.snapshot_id;
+	if (snapshot.parent_snapshot_id) {
+		ret.has_parent_snapshot = true;
+		ret.parent_snapshot_id = *snapshot.parent_snapshot_id;
+	}
 	ret.timestamp_ms = Timestamp::FromEpochMs(snapshot.timestamp_ms);
 	D_ASSERT(snapshot.schema_id);
 	ret.schema_id = *snapshot.schema_id;
