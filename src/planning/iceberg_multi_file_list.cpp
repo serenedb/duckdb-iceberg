@@ -1102,6 +1102,14 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
 
 vector<reference<const IcebergEqualityDeleteFile>>
 IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry) const {
+	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
+	return GetEqualityDeletesForFile(bound_manifest_entry,
+	                                 bound_manifest_entry.entry->GetSequenceNumber(manifest_file));
+}
+
+vector<reference<const IcebergEqualityDeleteFile>>
+IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry &bound_manifest_entry,
+                                                sequence_number_t after_sequence_number) const {
 	lock_guard<mutex> guard(shared_state->delete_lock);
 	vector<reference<const IcebergEqualityDeleteFile>> result;
 
@@ -1110,7 +1118,7 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 	auto &manifest_file = data_manifests[bound_manifest_entry.manifest_file_idx].entry.file;
 	auto &data_file = manifest_entry->data_file;
 	auto &metadata = GetMetadata();
-	auto it = shared_state->equality_delete_data.upper_bound(manifest_entry->GetSequenceNumber(manifest_file));
+	auto it = shared_state->equality_delete_data.upper_bound(after_sequence_number);
 	for (; it != shared_state->equality_delete_data.end(); it++) {
 		auto &files = it->second->files;
 		for (auto &file : files) {
@@ -1122,12 +1130,17 @@ IcebergMultiFileList::GetEqualityDeletesForFile(const BoundIcebergManifestEntry 
 					continue;
 				}
 				D_ASSERT(file.partition_info.size() == data_file.partition_info.size());
+				bool partition_matches = true;
 				for (idx_t i = 0; i < file.partition_info.size(); i++) {
 					if (file.partition_info[i] != data_file.partition_info[i]) {
 						//! Same partition spec id, but the partitioning information doesn't match, delete file doesn't
 						//! apply.
-						continue;
+						partition_matches = false;
+						break;
 					}
+				}
+				if (!partition_matches) {
+					continue;
 				}
 			}
 			result.emplace_back(file);
