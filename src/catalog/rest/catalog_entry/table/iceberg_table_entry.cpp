@@ -51,13 +51,15 @@ void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) cons
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &secret_manager = SecretManager::Get(context);
 
-	if (ic_catalog.attach_options.access_mode != IRCAccessDelegationMode::VENDED_CREDENTIALS) {
+	if (ic_catalog.attach_options.access_mode == IRCAccessDelegationMode::NONE) {
 		// assume secret already exists
 		return;
 	}
-	// Get Credentials from IRC API
+	// Get Credentials from IRC API, or mint them from the catalog's own bearer token
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto table_credentials = table_info.GetVendedCredentials(context);
+	auto table_credentials = ic_catalog.attach_options.access_mode == IRCAccessDelegationMode::CATALOG_TOKEN
+	                             ? table_info.GetCatalogTokenCredentials(context)
+	                             : table_info.GetVendedCredentials(context);
 	auto metadata_path = table_info.table_metadata.GetMetadataPath(fs);
 
 	unique_ptr<SecretEntry> http_secret_entry;

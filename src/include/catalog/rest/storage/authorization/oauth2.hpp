@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/rest/storage/iceberg_authorization.hpp"
+#include "rest_catalog/objects/oauth_token_response.hpp"
 #include <mutex>
 
 namespace duckdb {
@@ -22,6 +23,11 @@ public:
 	                                 const string &data = "") override;
 	static string GetToken(ClientContext &context, const string &grant_type, const string &uri, const string &client_id,
 	                       const string &client_secret, const string &scope);
+	//! Returns the current bearer token, refreshing it first if expired and refresh is possible.
+	string GetValidToken(ClientContext &context);
+	//! RFC 7523 JWT-bearer token exchange (Google service accounts)
+	static rest_api_objects::OAuthTokenResponse FetchJwtBearerToken(ClientContext &context, const string &uri,
+	                                                                const string &assertion);
 	static void SetCatalogSecretParameters(CreateSecretFunction &function);
 	static unique_ptr<BaseSecret> CreateCatalogSecretFunction(ClientContext &context, CreateSecretInput &input);
 
@@ -34,7 +40,7 @@ public:
 	string scope;
 	string default_region;
 
-private:
+protected:
 	//! Mutable token state (protected by token_mutex)
 	string token;
 	string refresh_token;
@@ -45,10 +51,11 @@ private:
 	//! Safe to call during construction (before sharing) and under token_mutex afterwards.
 	void UpdateTokenState(const string &new_token, int32_t expires_in, const string &new_refresh_token);
 
-	//! Internal methods -- caller must hold token_mutex
+	//! Internal methods -- caller must hold token_mutex.
+	//! Refresh is virtual: subclasses (e.g. GoogleAuthorization) supply their own token minting.
 	bool IsTokenExpiredUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock) const;
-	bool CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const;
-	void RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock);
+	virtual bool CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const;
+	virtual void RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock);
 
 	//! Mutex to serialize token refresh. Held during check+refresh+copy, released before catalog I/O.
 	//! At most one thread refreshes at a time; others queue and re-check expiry after acquiring.

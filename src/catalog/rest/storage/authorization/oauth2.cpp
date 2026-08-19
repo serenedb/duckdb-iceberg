@@ -1,5 +1,7 @@
 #include "catalog/rest/storage/authorization/oauth2.hpp"
 
+#include "catalog/rest/storage/authorization/google_credentials.hpp"
+
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -96,6 +98,7 @@ static void ExtractOAuth2CredentialsFromSecret(const KeyValueSecret &kv_secret, 
 	if (!oauth2_scope_val.IsNull()) {
 		result.scope = oauth2_scope_val.ToString();
 	}
+
 }
 
 static void ExtractOAuth2CredentialsFromOptions(const case_insensitive_map_t<Value> &options,
@@ -138,9 +141,13 @@ static rest_api_objects::OAuthTokenResponse FetchOAuth2TokenResponse(ClientConte
 	// Google requires client credentials in POST body for refresh_token grant (not Basic Auth)
 	// RFC 6749 Section 2.3.1 allows either method; we use POST body for refresh_token (Google),
 	// Basic Auth for client_credentials (Keycloak/Polaris standard)
-	bool use_body_auth = (grant_type == "refresh_token");
+	bool use_body_auth = (grant_type == "refresh_token" || grant_type == GoogleCredentials::JWT_BEARER_GRANT);
 
-	if (grant_type == "refresh_token") {
+	if (grant_type == GoogleCredentials::JWT_BEARER_GRANT) {
+		// RFC 7523: the signed JWT assertion is the sole credential (Google service accounts)
+		parameters.push_back(
+		    StringUtil::Format("%s=%s", XWWWFormUrlEncode("assertion"), XWWWFormUrlEncode(refresh_token_param)));
+	} else if (grant_type == "refresh_token") {
 		// RFC 6749 Section 6: Refreshing an Access Token
 		// Google requires client credentials in POST body (not Basic Auth) for this grant
 		parameters.push_back(
@@ -240,13 +247,21 @@ string OAuth2Authorization::GetToken(ClientContext &context, const string &grant
 	return token_response.access_token;
 }
 
+rest_api_objects::OAuthTokenResponse OAuth2Authorization::FetchJwtBearerToken(ClientContext &context,
+                                                                              const string &uri,
+                                                                              const string &assertion) {
+	return FetchOAuth2TokenResponse(context, GoogleCredentials::JWT_BEARER_GRANT, uri, "", "", "", assertion);
+}
+
 unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedDatabase &db, ClientContext &context,
                                                                        IcebergAttachOptions &input) {
-	auto result = make_uniq<OAuth2Authorization>(db);
+	//! Constructed once we know whether the secret selects a Google authorization
+	unique_ptr<OAuth2Authorization> result;
 
 	unordered_map<string, Value> remaining_options;
 	case_insensitive_map_t<Value> create_secret_options;
 	string secret;
+	string default_region;
 	Value token;
 
 	static const unordered_set<string> recognized_create_secret_options {
@@ -258,7 +273,7 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 		if (lower_name == "secret") {
 			secret = entry.second.ToString();
 		} else if (lower_name == "default_region") {
-			result->default_region = entry.second.ToString();
+			default_region = entry.second.ToString();
 		} else if (recognized_create_secret_options.count(lower_name)) {
 			create_secret_options.emplace(std::move(entry));
 		} else {
@@ -281,6 +296,16 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 			}
 		}
 		auto &kv_iceberg_secret = dynamic_cast<const KeyValueSecret &>(*iceberg_secret->secret);
+
+		auto grant_type_val = kv_iceberg_secret.TryGetValue("oauth2_grant_type");
+		auto grant_type_str = grant_type_val.IsNull() ? string() : grant_type_val.ToString();
+		if (grant_type_str == GoogleCredentials::SERVICE_ACCOUNT_GRANT ||
+		    grant_type_str == GoogleCredentials::METADATA_GRANT) {
+			result = GoogleCredentials::MakeAuthorization(db, kv_iceberg_secret);
+		} else {
+			result = make_uniq<OAuth2Authorization>(db);
+		}
+
 		auto endpoint_from_secret = kv_iceberg_secret.TryGetValue("endpoint");
 		if (input.endpoint.empty()) {
 			if (endpoint_from_secret.IsNull()) {
@@ -329,6 +354,8 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 			    StringUtil::Join(option_names, ", "));
 		}
 
+		result = make_uniq<OAuth2Authorization>(db);
+
 		// Extract credentials from options BEFORE creating the secret
 		// These will be needed for token refresh
 		ExtractOAuth2CredentialsFromOptions(create_secret_options, *result);
@@ -367,6 +394,7 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 		throw HTTPException(StringUtil::Format("Failed to retrieve OAuth2 token from %s", result->uri));
 	}
 	result->token = token.ToString();
+	result->default_region = default_region;
 
 	input.options = std::move(remaining_options);
 	return result;
@@ -540,6 +568,14 @@ unique_ptr<HTTPResponse> OAuth2Authorization::Request(RequestType request_type, 
 	}
 
 	return response;
+}
+
+string OAuth2Authorization::GetValidToken(ClientContext &context) {
+	std::lock_guard<std::mutex> lock(token_mutex);
+	if (IsTokenExpiredUnlocked(context, lock) && CanRefreshUnlocked(lock)) {
+		RefreshAccessTokenUnlocked(context, lock);
+	}
+	return token;
 }
 
 void OAuth2Authorization::SetCatalogSecretParameters(CreateSecretFunction &function) {

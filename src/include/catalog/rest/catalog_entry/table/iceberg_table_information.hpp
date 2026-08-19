@@ -52,6 +52,9 @@ public:
 	                                               const IcebergTableSchema &schema, int32_t spec_id,
 	                                               idx_t base_partition_field_id);
 	IRCAPITableCredentials GetVendedCredentials(ClientContext &context);
+	//! Build storage credentials from the catalog's own (auto-refreshed) OAuth2 bearer token
+	//! instead of asking the REST server to vend them. GCS-backed tables only.
+	IRCAPITableCredentials GetCatalogTokenCredentials(ClientContext &context);
 	const string &BaseFilePath() const;
 
 	IcebergTransactionData &GetOrCreateTransactionData(IcebergTransaction &transaction);

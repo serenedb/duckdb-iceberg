@@ -619,14 +619,21 @@ unique_ptr<Catalog> IcebergCatalog::Attach(optional_ptr<StorageExtensionInfo> st
 			attach_options.access_mode = IRCAccessDelegationMode::VENDED_CREDENTIALS;
 		} else if (access_mode_string == "none") {
 			attach_options.access_mode = IRCAccessDelegationMode::NONE;
+		} else if (access_mode_string == "catalog_token") {
+			attach_options.access_mode = IRCAccessDelegationMode::CATALOG_TOKEN;
 		} else {
 			throw InvalidInputException(
-			    "Unrecognized access mode '%s'. Supported options are 'vended_credentials' and 'none'",
+			    "Unrecognized access mode '%s'. Supported options are 'vended_credentials', 'catalog_token' and 'none'",
 			    access_mode_string);
 		}
 	}
 	if (attach_options.authorization_type == IcebergAuthorizationType::INVALID) {
 		attach_options.authorization_type = IcebergAuthorizationType::OAUTH2;
+	}
+	if (attach_options.access_mode == IRCAccessDelegationMode::CATALOG_TOKEN &&
+	    attach_options.authorization_type != IcebergAuthorizationType::OAUTH2) {
+		throw InvalidConfigurationException(
+		    "access_delegation_mode 'catalog_token' requires authorization_type 'oauth2'");
 	}
 
 	//! Finally, create the auth_handler class from the authorization_type and the remaining options

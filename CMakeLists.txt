@@ -10,6 +10,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 include_directories(src/include)
 
+# duckdb's bundled mbedtls: used for RS256-signing Google service-account JWTs
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../duckdb/third_party/mbedtls/include)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../duckdb/third_party/mbedtls/include)
+endif()
+
 # Compile-time toggle for the experimental, testing-only Iceberg equality-delete WRITE path.
 # Off by default: the shipped extension cannot create equality-delete files. Enable it to
 # generate equality-delete files locally for testing the equality-delete READ path:
@@ -37,6 +42,7 @@ set(EXTENSION_SOURCES
 	src/catalog/rest/iceberg_catalog.cpp
 	src/catalog/rest/iceberg_schema_set.cpp
 	src/catalog/rest/iceberg_table_set.cpp
+	src/catalog/rest/storage/authorization/google_credentials.cpp
 	src/catalog/rest/storage/authorization/none.cpp
 	src/catalog/rest/storage/authorization/oauth2.cpp
 	src/catalog/rest/storage/authorization/sigv4.cpp

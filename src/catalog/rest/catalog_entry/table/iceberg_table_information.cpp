@@ -272,6 +272,39 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 	return result;
 }
 
+IRCAPITableCredentials IcebergTableInformation::GetCatalogTokenCredentials(ClientContext &context) {
+	IRCAPITableCredentials result;
+	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
+	auto &transaction = IcebergTransaction::Get(context, catalog);
+
+	auto secret_base_name =
+	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
+	{
+		lock_guard<mutex> guard(transaction.lock);
+		transaction.created_secrets.insert(secret_base_name);
+	}
+
+	const auto &table_location = table_metadata.GetLocation();
+	auto storage_type = DetectStorageType(table_location);
+	if (storage_type != "gcs") {
+		throw InvalidConfigurationException(
+		    "access_delegation_mode 'catalog_token' only supports GCS-backed tables; table '%s' is stored at '%s'",
+		    name, table_location);
+	}
+	auto &oauth2_auth = catalog.auth_handler->Cast<OAuth2Authorization>();
+
+	result.config = make_uniq<CreateSecretInput>();
+	auto &config = *result.config;
+	config.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	config.persist_type = SecretPersistType::TEMPORARY;
+	config.options["bearer_token"] = Value(oauth2_auth.GetValidToken(context));
+	config.name = Identifier(secret_base_name);
+	config.type = Identifier(storage_type);
+	config.provider = "config";
+	config.storage_type = "memory";
+	return result;
+}
+
 optional_ptr<CatalogEntry> IcebergTableInformation::CreateSchemaVersion(const IcebergTableSchema &table_schema) {
 	CreateTableInfo info;
 	info.SetTableName(Identifier(name));
