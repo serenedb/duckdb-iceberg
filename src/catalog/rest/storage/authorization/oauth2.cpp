@@ -141,13 +141,9 @@ static rest_api_objects::OAuthTokenResponse FetchOAuth2TokenResponse(ClientConte
 	// Google requires client credentials in POST body for refresh_token grant (not Basic Auth)
 	// RFC 6749 Section 2.3.1 allows either method; we use POST body for refresh_token (Google),
 	// Basic Auth for client_credentials (Keycloak/Polaris standard)
-	bool use_body_auth = (grant_type == "refresh_token" || grant_type == GoogleCredentials::JWT_BEARER_GRANT);
+	bool use_body_auth = (grant_type == "refresh_token");
 
-	if (grant_type == GoogleCredentials::JWT_BEARER_GRANT) {
-		// RFC 7523: the signed JWT assertion is the sole credential (Google service accounts)
-		parameters.push_back(
-		    StringUtil::Format("%s=%s", XWWWFormUrlEncode("assertion"), XWWWFormUrlEncode(refresh_token_param)));
-	} else if (grant_type == "refresh_token") {
+	if (grant_type == "refresh_token") {
 		// RFC 6749 Section 6: Refreshing an Access Token
 		// Google requires client credentials in POST body (not Basic Auth) for this grant
 		parameters.push_back(
@@ -247,12 +243,6 @@ string OAuth2Authorization::GetToken(ClientContext &context, const string &grant
 	return token_response.access_token;
 }
 
-rest_api_objects::OAuthTokenResponse OAuth2Authorization::FetchJwtBearerToken(ClientContext &context,
-                                                                              const string &uri,
-                                                                              const string &assertion) {
-	return FetchOAuth2TokenResponse(context, GoogleCredentials::JWT_BEARER_GRANT, uri, "", "", "", assertion);
-}
-
 unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedDatabase &db, ClientContext &context,
                                                                        IcebergAttachOptions &input) {
 	//! Constructed once we know whether the secret selects a Google authorization
@@ -297,11 +287,8 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 		}
 		auto &kv_iceberg_secret = dynamic_cast<const KeyValueSecret &>(*iceberg_secret->secret);
 
-		auto grant_type_val = kv_iceberg_secret.TryGetValue("oauth2_grant_type");
-		auto grant_type_str = grant_type_val.IsNull() ? string() : grant_type_val.ToString();
-		if (grant_type_str == GoogleCredentials::SERVICE_ACCOUNT_GRANT ||
-		    grant_type_str == GoogleCredentials::METADATA_GRANT) {
-			result = GoogleCredentials::MakeAuthorization(db, kv_iceberg_secret);
+		if (StringUtil::CIEquals(kv_iceberg_secret.GetProvider().GetIdentifierName(), GoogleAuthorization::PROVIDER)) {
+			result = GoogleAuthorization::FromSecret(db, kv_iceberg_secret);
 		} else {
 			result = make_uniq<OAuth2Authorization>(db);
 		}

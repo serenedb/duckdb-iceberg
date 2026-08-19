@@ -25,9 +25,6 @@ public:
 	                       const string &client_secret, const string &scope);
 	//! Returns the current bearer token, refreshing it first if expired and refresh is possible.
 	string GetValidToken(ClientContext &context);
-	//! RFC 7523 JWT-bearer token exchange (Google service accounts)
-	static rest_api_objects::OAuthTokenResponse FetchJwtBearerToken(ClientContext &context, const string &uri,
-	                                                                const string &assertion);
 	static void SetCatalogSecretParameters(CreateSecretFunction &function);
 	static unique_ptr<BaseSecret> CreateCatalogSecretFunction(ClientContext &context, CreateSecretInput &input);
 

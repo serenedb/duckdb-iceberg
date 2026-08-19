@@ -123,8 +123,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	OAuth2Authorization::SetCatalogSecretParameters(secret_function);
 	loader.RegisterFunction(secret_function);
 
-	CreateSecretFunction google_secret_function = {"iceberg", "google", GoogleCredentials::CreateGoogleSecretFunction};
-	GoogleCredentials::SetGoogleSecretParameters(google_secret_function);
+	CreateSecretFunction google_secret_function = {"iceberg", GoogleAuthorization::PROVIDER,
+	                                               GoogleAuthorization::CreateSecret};
+	GoogleAuthorization::SetSecretParameters(google_secret_function);
 	loader.RegisterFunction(google_secret_function);
 
 	auto &log_manager = instance.GetLogManager();

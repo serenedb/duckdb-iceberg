@@ -1,19 +1,17 @@
 
 #include "catalog/rest/storage/authorization/google_credentials.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "catalog/rest/api/api_utils.hpp"
 #include "catalog/rest/api/catalog_utils.hpp"
-#include "catalog/rest/storage/authorization/oauth2.hpp"
 
 #include "mbedtls/base64.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
-
-#include "duckdb/common/enum_util.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -78,6 +76,10 @@ static string WriteJsonObject(const std::function<void(yyjson_mut_doc *, yyjson_
 }
 
 static rest_api_objects::OAuthTokenResponse ParseTokenResponse(const HTTPResponse &response, const string &source) {
+	if (response.status < HTTPStatusCode::OK_200 || response.status >= HTTPStatusCode::MultipleChoices_300) {
+		throw InvalidConfigurationException("Could not get token from %s: HTTP %s - %s", source,
+		                                    EnumUtil::ToString(response.status), response.body);
+	}
 	std::unique_ptr<yyjson_doc, YyjsonDocDeleter> doc(yyjson_read(response.body.c_str(), response.body.size(), 0));
 	if (!doc) {
 		throw InvalidConfigurationException("Could not get token from %s: response is not valid JSON", source);
@@ -91,9 +93,8 @@ static rest_api_objects::OAuthTokenResponse ParseTokenResponse(const HTTPRespons
 	return token_response;
 }
 
-} // namespace
-
-string GoogleCredentials::BuildSignedJwt(const GoogleServiceAccountKey &key, const string &scope) {
+//! Build the RS256-signed JWT assertion for the service-account exchange (RFC 7523)
+static string BuildSignedJwt(const GoogleServiceAccountKey &key, const string &scope) {
 	auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
 	               .count();
 
@@ -142,7 +143,30 @@ string GoogleCredentials::BuildSignedJwt(const GoogleServiceAccountKey &key, con
 	return signing_input + "." + Base64UrlEncode(string(reinterpret_cast<char *>(sig), sig_len));
 }
 
-rest_api_objects::OAuthTokenResponse GoogleCredentials::FetchMetadataToken(ClientContext &context) {
+//! Exchange the signed JWT for an access token at the key's token endpoint
+static rest_api_objects::OAuthTokenResponse ExchangeJwt(ClientContext &context, const GoogleServiceAccountKey &key,
+                                                        const string &scope) {
+	auto assertion = BuildSignedJwt(key, scope);
+	// The assertion's base64url alphabet needs no form-encoding; the grant type is pre-encoded
+	auto post_data = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + assertion;
+
+	auto endpoint_builder = IRCEndpointBuilder::FromURL(key.token_uri);
+	HTTPHeaders headers(*context.db);
+	headers.Insert("Content-Type", "application/x-www-form-urlencoded");
+
+	unique_ptr<HTTPResponse> response;
+	try {
+		response = APIUtils::Request(RequestType::POST_REQUEST, nullptr, context, endpoint_builder, headers, post_data);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		throw InvalidConfigurationException("Could not get token from %s: %s", key.token_uri, error.RawMessage());
+	}
+	return ParseTokenResponse(*response, key.token_uri);
+}
+
+//! Fetch a token for the attached service account from the GCE/GKE metadata server.
+//! Honors GCE_METADATA_HOST (Google client-library convention) for testability.
+static rest_api_objects::OAuthTokenResponse FetchMetadataToken(ClientContext &context) {
 	const char *host_env = std::getenv("GCE_METADATA_HOST");
 	string host = host_env && host_env[0] ? host_env : "metadata.google.internal";
 	auto url = StringUtil::Format("http://%s/computeMetadata/v1/instance/service-accounts/default/token", host);
@@ -160,31 +184,59 @@ rest_api_objects::OAuthTokenResponse GoogleCredentials::FetchMetadataToken(Clien
 		    "Could not reach the GCE metadata server at '%s' (is this host running on Google Cloud?): %s", host,
 		    error.RawMessage());
 	}
-	if (response->status < HTTPStatusCode::OK_200 || response->status >= HTTPStatusCode::MultipleChoices_300) {
-		throw InvalidConfigurationException("Could not get token from the GCE metadata server at '%s': HTTP %s - %s",
-		                                    host, EnumUtil::ToString(response->status), response->body);
-	}
 	return ParseTokenResponse(*response, "the GCE metadata server");
 }
 
-unique_ptr<BaseSecret> GoogleCredentials::CreateGoogleSecretFunction(ClientContext &context, CreateSecretInput &input) {
+} // namespace
+
+GoogleAuthorization::GoogleAuthorization(AttachedDatabase &db, Mode mode, GoogleServiceAccountKey key)
+    : OAuth2Authorization(db), mode(mode), key(std::move(key)) {
+}
+
+rest_api_objects::OAuthTokenResponse GoogleAuthorization::MintToken(ClientContext &context, Mode mode,
+                                                                    const GoogleServiceAccountKey &key,
+                                                                    const string &scope) {
+	if (mode == Mode::METADATA_SERVER) {
+		return FetchMetadataToken(context);
+	}
+	return ExchangeJwt(context, key, scope);
+}
+
+unique_ptr<OAuth2Authorization> GoogleAuthorization::FromSecret(AttachedDatabase &db,
+                                                                const KeyValueSecret &kv_secret) {
+	auto get_string = [&](const char *name) -> string {
+		auto val = kv_secret.TryGetValue(name);
+		return val.IsNull() ? string() : val.ToString();
+	};
+	GoogleServiceAccountKey key;
+	key.client_email = get_string("client_email");
+	key.private_key = get_string("private_key");
+	key.private_key_id = get_string("private_key_id");
+	key.token_uri = get_string("token_uri");
+
+	auto mode = key.private_key.empty() ? Mode::METADATA_SERVER : Mode::SERVICE_ACCOUNT;
+	if (mode == Mode::SERVICE_ACCOUNT && key.client_email.empty()) {
+		throw InvalidConfigurationException("PROVIDER google secret '%s' has a 'private_key' but no 'client_email'",
+		                                    kv_secret.GetName());
+	}
+	return make_uniq<GoogleAuthorization>(db, mode, std::move(key));
+}
+
+unique_ptr<BaseSecret> GoogleAuthorization::CreateSecret(ClientContext &context, CreateSecretInput &input) {
 	auto result = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
 
-	string client_email;
-	string private_key;
-	string private_key_id;
-	string token_uri;
+	GoogleServiceAccountKey key;
 	string oauth2_scope = DEFAULT_SCOPE;
 	for (const auto &named_param : input.options) {
 		auto lower_name = StringUtil::Lower(named_param.first);
 		if (lower_name == "client_email") {
-			client_email = named_param.second.ToString();
+			key.client_email = named_param.second.ToString();
 		} else if (lower_name == "private_key") {
-			private_key = named_param.second.ToString();
+			key.private_key = named_param.second.ToString();
 		} else if (lower_name == "private_key_id") {
-			private_key_id = named_param.second.ToString();
+			key.private_key_id = named_param.second.ToString();
 		} else if (lower_name == "token_uri") {
-			token_uri = named_param.second.ToString();
+			key.token_uri = named_param.second.ToString();
 		} else if (lower_name == "oauth2_scope") {
 			oauth2_scope = named_param.second.ToString();
 		} else if (lower_name == "endpoint") {
@@ -192,28 +244,24 @@ unique_ptr<BaseSecret> GoogleCredentials::CreateGoogleSecretFunction(ClientConte
 		} else if (lower_name == "extra_http_headers") {
 			result->secret_map["extra_http_headers"] = named_param.second;
 		} else {
-			throw InvalidInputException("Unknown named parameter passed to CreateGoogleSecretFunction: %s", lower_name);
+			throw InvalidInputException("Unknown named parameter passed to GoogleAuthorization::CreateSecret: %s",
+			                            lower_name);
 		}
 	}
-	bool has_fields = !client_email.empty() || !private_key.empty() || !private_key_id.empty() || !token_uri.empty();
 
-	rest_api_objects::OAuthTokenResponse token_response;
-	if (has_fields) {
-		if (client_email.empty() || private_key.empty()) {
-			throw InvalidInputException(
-			    "service-account credentials require both 'client_email' and 'private_key'");
+	Mode mode;
+	if (!key.client_email.empty() || !key.private_key.empty() || !key.private_key_id.empty() ||
+	    !key.token_uri.empty()) {
+		if (key.client_email.empty() || key.private_key.empty()) {
+			throw InvalidInputException("service-account credentials require both 'client_email' and 'private_key'");
 		}
-		GoogleServiceAccountKey key;
-		key.client_email = client_email;
+		mode = Mode::SERVICE_ACCOUNT;
 		// Pasted straight out of a key JSON, the PEM carries literal \n sequences;
 		// without a JSON parser in the path we unescape them here (PEM never contains a backslash).
-		key.private_key = StringUtil::Replace(private_key, "\\n", "\n");
-		key.private_key_id = private_key_id;
-		key.token_uri = token_uri.empty() ? DEFAULT_TOKEN_URI : token_uri;
-
-		auto assertion = BuildSignedJwt(key, oauth2_scope);
-		token_response = OAuth2Authorization::FetchJwtBearerToken(context, key.token_uri, assertion);
-		result->secret_map["oauth2_grant_type"] = Value(SERVICE_ACCOUNT_GRANT);
+		key.private_key = StringUtil::Replace(key.private_key, "\\n", "\n");
+		if (key.token_uri.empty()) {
+			key.token_uri = DEFAULT_TOKEN_URI;
+		}
 		result->secret_map["client_email"] = Value(key.client_email);
 		result->secret_map["private_key"] = Value(key.private_key);
 		if (!key.private_key_id.empty()) {
@@ -221,9 +269,10 @@ unique_ptr<BaseSecret> GoogleCredentials::CreateGoogleSecretFunction(ClientConte
 		}
 		result->secret_map["token_uri"] = Value(key.token_uri);
 	} else {
-		token_response = FetchMetadataToken(context);
-		result->secret_map["oauth2_grant_type"] = Value(METADATA_GRANT);
+		mode = Mode::METADATA_SERVER;
 	}
+
+	auto token_response = MintToken(context, mode, key, oauth2_scope);
 	result->secret_map["oauth2_scope"] = Value(oauth2_scope);
 	result->secret_map["token"] = Value(token_response.access_token);
 	if (token_response.expires_in) {
@@ -233,51 +282,27 @@ unique_ptr<BaseSecret> GoogleCredentials::CreateGoogleSecretFunction(ClientConte
 	return std::move(result);
 }
 
-unique_ptr<OAuth2Authorization> GoogleCredentials::MakeAuthorization(AttachedDatabase &db,
-                                                                     const KeyValueSecret &kv_secret) {
-	auto result = make_uniq<GoogleAuthorization>(db);
-	auto get_string = [&](const char *name) -> string {
-		auto val = kv_secret.TryGetValue(name);
-		return val.IsNull() ? string() : val.ToString();
-	};
-	result->key.client_email = get_string("client_email");
-	result->key.private_key = get_string("private_key");
-	result->key.private_key_id = get_string("private_key_id");
-	result->key.token_uri = get_string("token_uri");
-	if (result->key.token_uri.empty()) {
-		result->key.token_uri = GoogleCredentials::DEFAULT_TOKEN_URI;
-	}
-	return std::move(result);
-}
-
-bool GoogleAuthorization::CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const {
-	(void)lock;
-	if (grant_type == GoogleCredentials::METADATA_GRANT) {
-		return true;
-	}
-	return !key.client_email.empty() && !key.private_key.empty();
-}
-
-void GoogleAuthorization::RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock) {
-	(void)lock;
-	rest_api_objects::OAuthTokenResponse token_response;
-	if (grant_type == GoogleCredentials::METADATA_GRANT) {
-		token_response = GoogleCredentials::FetchMetadataToken(context);
-	} else {
-		auto assertion = GoogleCredentials::BuildSignedJwt(key, scope);
-		token_response = FetchJwtBearerToken(context, key.token_uri, assertion);
-	}
-	UpdateTokenState(token_response.access_token, token_response.expires_in.value_or(0), "");
-}
-
-void GoogleCredentials::SetGoogleSecretParameters(CreateSecretFunction &function) {
+void GoogleAuthorization::SetSecretParameters(CreateSecretFunction &function) {
 	function.named_parameters[Identifier("client_email")] = LogicalType::VARCHAR;
 	function.named_parameters[Identifier("private_key")] = LogicalType::VARCHAR;
 	function.named_parameters[Identifier("private_key_id")] = LogicalType::VARCHAR;
 	function.named_parameters[Identifier("token_uri")] = LogicalType::VARCHAR;
 	function.named_parameters[Identifier("oauth2_scope")] = LogicalType::VARCHAR;
 	function.named_parameters[Identifier("endpoint")] = LogicalType::VARCHAR;
-	function.named_parameters[Identifier("extra_http_headers")] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	function.named_parameters[Identifier("extra_http_headers")] =
+	    LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+}
+
+bool GoogleAuthorization::CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const {
+	// Both modes can always mint a fresh token: FromSecret/CreateSecret guarantee the key
+	(void)lock;
+	return true;
+}
+
+void GoogleAuthorization::RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock) {
+	(void)lock;
+	auto token_response = MintToken(context, mode, key, scope);
+	UpdateTokenState(token_response.access_token, token_response.expires_in.value_or(0), "");
 }
 
 } // namespace duckdb
