@@ -37,6 +37,7 @@ set(EXTENSION_SOURCES
 	src/catalog/rest/iceberg_catalog.cpp
 	src/catalog/rest/iceberg_schema_set.cpp
 	src/catalog/rest/iceberg_table_set.cpp
+	src/catalog/rest/storage/authorization/google.cpp
 	src/catalog/rest/storage/authorization/none.cpp
 	src/catalog/rest/storage/authorization/oauth2.cpp
 	src/catalog/rest/storage/authorization/sigv4.cpp
