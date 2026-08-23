@@ -85,15 +85,17 @@ private:
 	int64_t token_expires_at DUCKDB_GUARDED_BY(token_mutex) = 0;
 	int32_t last_expires_in DUCKDB_GUARDED_BY(token_mutex) = 0;
 
+	bool IsTokenExpiredUnlocked(ClientContext &context) const DUCKDB_REQUIRES(token_mutex);
+
+protected:
 	//! Helper to update token state from OAuth2 response.
 	//! Caller must hold token_mutex, including during initialization.
 	void UpdateTokenState(const string &new_token, int32_t expires_in, const string &new_refresh_token)
 	    DUCKDB_REQUIRES(token_mutex);
 
 	//! Internal methods -- caller must hold token_mutex
-	bool IsTokenExpiredUnlocked(ClientContext &context) const DUCKDB_REQUIRES(token_mutex);
-	bool CanRefreshUnlocked() const DUCKDB_REQUIRES(token_mutex);
-	void RefreshAccessTokenUnlocked(ClientContext &context) DUCKDB_REQUIRES(token_mutex);
+	virtual bool CanRefreshUnlocked() const DUCKDB_REQUIRES(token_mutex);
+	virtual void RefreshAccessTokenUnlocked(ClientContext &context) DUCKDB_REQUIRES(token_mutex);
 
 	//! Mutex to serialize token refresh. Held during check+refresh+copy, released before catalog I/O.
 	//! At most one thread refreshes at a time; others queue and re-check expiry after acquiring.
