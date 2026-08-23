@@ -1,4 +1,5 @@
 #include "catalog/rest/storage/authorization/oauth2.hpp"
+#include "catalog/rest/storage/authorization/google.hpp"
 
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
@@ -281,6 +282,11 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 			}
 		}
 		auto &kv_iceberg_secret = dynamic_cast<const KeyValueSecret &>(*iceberg_secret->secret);
+		if (StringUtil::CIEquals(iceberg_secret->secret->GetProvider().GetIdentifierName(), "google")) {
+			auto google_result = GoogleAuthorization::FromSecret(db, context, input, kv_iceberg_secret);
+			input.options = std::move(remaining_options);
+			return google_result;
+		}
 		auto endpoint_from_secret = kv_iceberg_secret.TryGetValue("endpoint");
 		if (input.endpoint.empty()) {
 			if (endpoint_from_secret.IsNull()) {
