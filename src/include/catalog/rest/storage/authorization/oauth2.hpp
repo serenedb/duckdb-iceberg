@@ -34,7 +34,7 @@ public:
 	string scope;
 	string default_region;
 
-private:
+protected:
 	//! Mutable token state (protected by token_mutex)
 	string token;
 	string refresh_token;
@@ -47,8 +47,8 @@ private:
 
 	//! Internal methods -- caller must hold token_mutex
 	bool IsTokenExpiredUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock) const;
-	bool CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const;
-	void RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock);
+	virtual bool CanRefreshUnlocked(std::lock_guard<std::mutex> &lock) const;
+	virtual void RefreshAccessTokenUnlocked(ClientContext &context, std::lock_guard<std::mutex> &lock);
 
 	//! Mutex to serialize token refresh. Held during check+refresh+copy, released before catalog I/O.
 	//! At most one thread refreshes at a time; others queue and re-check expiry after acquiring.
