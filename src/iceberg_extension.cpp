@@ -18,6 +18,7 @@
 #include "catalog/rest/transaction/iceberg_transaction_manager.hpp"
 #include "function/iceberg_functions.hpp"
 #include "catalog/rest/api/catalog_api.hpp"
+#include "catalog/rest/storage/authorization/google.hpp"
 #include "catalog/rest/storage/authorization/oauth2.hpp"
 #include "catalog/rest/storage/authorization/sigv4.hpp"
 #include "catalog/rest/storage/iceberg_table_secret_provider.hpp"
@@ -170,6 +171,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	OAuth2Authorization::SetCatalogSecretParameters(secret_function);
 	loader.RegisterFunction(secret_function);
 	IcebergTableSecretProvider::Register(loader);
+
+	CreateSecretFunction google_secret_function = {"iceberg", "google",
+	                                               GoogleAuthorization::CreateCatalogSecretFunction};
+	GoogleAuthorization::SetCatalogSecretParameters(google_secret_function);
+	loader.RegisterFunction(google_secret_function);
 
 	auto &log_manager = instance.GetLogManager();
 	log_manager.RegisterLogType(make_uniq<IcebergLogType>());
