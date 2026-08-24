@@ -25,7 +25,7 @@ WITH (
 	'write.parquet.compression-codec'='snappy',
 	'write.target-file-size-bytes' = '6388608'
 ) 
-AS SELECT i id FROM range(5000000) t(i);
+AS SELECT i id FROM range_st(5000000) t(i);
 
 query I
 select count(*) from iceberg_metadata(my_datalake.default.test);

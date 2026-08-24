@@ -121,7 +121,7 @@ statement ok
 use my_datalake.view_regressions;
 
 query II
-select a, a_1 from duplicate_names;
+select a, "a:1" from duplicate_names;
 ----
 42	43
 

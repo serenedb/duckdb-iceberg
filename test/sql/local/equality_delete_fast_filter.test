@@ -8,7 +8,7 @@ include test/sql/init_requires
 query I
 SELECT current_setting('iceberg_equality_delete_fast_filter');
 ----
-true
+on
 
 foreach fast_filter true false
 

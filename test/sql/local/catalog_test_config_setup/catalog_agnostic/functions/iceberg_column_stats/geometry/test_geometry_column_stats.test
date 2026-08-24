@@ -41,7 +41,7 @@ query III
 select column_name, lower_bound, upper_bound
 from iceberg_column_stats(my_datalake.default.geom_stats_xy);
 ----
-g	{"bbox_x":-3.0,"bbox_y":-4.0,"bbox_z":null,"bbox_m":null}	{"bbox_x":10.0,"bbox_y":10.0,"bbox_z":null,"bbox_m":null}
+g	{"bbox_x":-3,"bbox_y":-4,"bbox_z":null,"bbox_m":null}	{"bbox_x":10,"bbox_y":10,"bbox_z":null,"bbox_m":null}
 
 # --- XYZ -----------------------------------------------------------------
 
@@ -61,7 +61,7 @@ query III
 select column_name, lower_bound, upper_bound
 from iceberg_column_stats(my_datalake.default.geom_stats_xyz);
 ----
-g	{"bbox_x":1.0,"bbox_y":2.0,"bbox_z":3.0,"bbox_m":null}	{"bbox_x":10.0,"bbox_y":10.0,"bbox_z":10.0,"bbox_m":null}
+g	{"bbox_x":1,"bbox_y":2,"bbox_z":3,"bbox_m":null}	{"bbox_x":10,"bbox_y":10,"bbox_z":10,"bbox_m":null}
 
 # --- XYM -----------------------------------------------------------------
 # The writer pads the Z slot with ±infinity for XYM, so bbox_z is reported as JSON null
@@ -82,7 +82,7 @@ query III
 select column_name, lower_bound, upper_bound
 from iceberg_column_stats(my_datalake.default.geom_stats_xym);
 ----
-g	{"bbox_x":1.0,"bbox_y":2.0,"bbox_z":null,"bbox_m":3.0}	{"bbox_x":5.0,"bbox_y":7.0,"bbox_z":null,"bbox_m":9.0}
+g	{"bbox_x":1,"bbox_y":2,"bbox_z":null,"bbox_m":3}	{"bbox_x":5,"bbox_y":7,"bbox_z":null,"bbox_m":9}
 
 # --- XYZM ----------------------------------------------------------------
 
@@ -101,7 +101,7 @@ query III
 select column_name, lower_bound, upper_bound
 from iceberg_column_stats(my_datalake.default.geom_stats_xyzm);
 ----
-g	{"bbox_x":1.0,"bbox_y":2.0,"bbox_z":3.0,"bbox_m":4.0}	{"bbox_x":5.0,"bbox_y":7.0,"bbox_z":9.0,"bbox_m":11.0}
+g	{"bbox_x":1,"bbox_y":2,"bbox_z":3,"bbox_m":4}	{"bbox_x":5,"bbox_y":7,"bbox_z":9,"bbox_m":11}
 
 # The bounds are valid JSON, so individual axes are queryable by casting to JSON.
 query III
@@ -150,5 +150,5 @@ query III
 select column_name, lower_bound, upper_bound
 from iceberg_column_stats(my_datalake.default.geom_stats_mixed) order by column_name;
 ----
-g	{"bbox_x":1.0,"bbox_y":2.0,"bbox_z":null,"bbox_m":null}	{"bbox_x":5.0,"bbox_y":7.0,"bbox_z":null,"bbox_m":null}
+g	{"bbox_x":1,"bbox_y":2,"bbox_z":null,"bbox_m":null}	{"bbox_x":5,"bbox_y":7,"bbox_z":null,"bbox_m":null}
 id	1	2

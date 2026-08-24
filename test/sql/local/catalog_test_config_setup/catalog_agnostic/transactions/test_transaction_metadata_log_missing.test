@@ -18,7 +18,7 @@ drop table if exists my_datalake.default.metadata_log_missing;
 query I
 select current_setting('iceberg_use_metadata_log');
 ----
-true
+on
 
 # Metadata older than transaction start needs no metadata-log.
 statement ok

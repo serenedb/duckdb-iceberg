@@ -42,7 +42,7 @@ select * from table_unpartitioned
 statement error
 select * from table_unpartitioned;
 ----
-<REGEX>:.*Did you mean.*my_datalake.default.table_unpartitioned.*
+<REGEX>:.*table_unpartitioned does not exist.*
 
 query II
 SELECT request.url, response.reason FROM duckdb_logs_parsed('HTTP') WHERE request.type='POST' AND (request.url).starts_with('http://127.0.0.1:8181/v1/') order by timestamp
