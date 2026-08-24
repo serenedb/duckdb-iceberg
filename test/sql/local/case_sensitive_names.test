@@ -17,7 +17,7 @@ select * from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/case_sensitive_n
 3	user_3
 
 query I
-select user_id_1 from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/case_sensitive_names/default.db/case_sensitive_names/metadata/00001-a7a3a44c-4aac-4619-bebd-11be37b27351.metadata.json') order by all;
+select "uSeR_Id:1" from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/case_sensitive_names/default.db/case_sensitive_names/metadata/00001-a7a3a44c-4aac-4619-bebd-11be37b27351.metadata.json') order by all;
 ----
 user_1
 user_2
@@ -26,5 +26,5 @@ user_3
 query I
 select column_name from (describe from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/case_sensitive_names/default.db/case_sensitive_names/metadata/00001-a7a3a44c-4aac-4619-bebd-11be37b27351.metadata.json')) order by all;
 ----
-uSeR_Id_1
+uSeR_Id:1
 user_id
