@@ -13,5 +13,5 @@ require httpfs
 query III
 select * from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/unknown_puffin/namespace/test_table') order by all;
 ----
-1	John	10	
+1	John	10
 4	David	40
