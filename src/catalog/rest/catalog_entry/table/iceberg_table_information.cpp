@@ -594,16 +594,21 @@ bool IcebergTableInformation::HasTransactionUpdates() const {
 	return false;
 }
 
-void IcebergTableInformation::RefreshFromCatalog(ClientContext &context) {
+void IcebergTableInformation::RefreshRequestCache(ClientContext &context) {
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
-	auto table_key = GetTableKey();
 	auto get_table_result = IRCAPI::GetTable(context, ic_catalog, schema, name);
 	if (get_table_result.error_) {
 		throw HTTPException(
 		    StringUtil::Format("GetTableInformation endpoint returned response code %s with message \"%s\"",
 		                       EnumUtil::ToString(get_table_result.status_), get_table_result.error_->_error.message));
 	}
-	ic_catalog.table_request_cache.SetOrOverwrite(context, table_key, std::move(get_table_result.result_));
+	ic_catalog.table_request_cache.SetOrOverwrite(context, GetTableKey(), std::move(get_table_result.result_));
+}
+
+void IcebergTableInformation::RefreshFromCatalog(ClientContext &context) {
+	RefreshRequestCache(context);
+	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
+	auto table_key = GetTableKey();
 	schema_versions.clear();
 	dummy_entry.reset();
 	{

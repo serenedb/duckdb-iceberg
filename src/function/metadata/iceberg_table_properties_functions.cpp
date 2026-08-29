@@ -181,7 +181,7 @@ static void SetIcebergTablePropertiesFunction(ClientContext &context, TableFunct
 		transaction_data.TableSetProperties(bind_data.properties);
 	});
 
-	auto schema = iceberg_table->schema.name;
+	auto schema = iceberg_table->ParentSchema().name;
 	auto table_name = iceberg_table->name;
 	global_state.properties_set = true;
 	// set success output, failure happens during transaction commit.
@@ -210,7 +210,7 @@ static void RemoveIcebergTablePropertiesFunction(ClientContext &context, TableFu
 		transaction_data.TableRemoveProperties(bind_data.remove_properties);
 	});
 
-	auto schema = iceberg_table->schema.name;
+	auto schema = iceberg_table->ParentSchema().name;
 	auto table_name = iceberg_table->name;
 	global_state.properties_removed = true;
 	// set success output, failure happens during transaction commit.
