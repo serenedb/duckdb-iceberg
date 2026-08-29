@@ -74,6 +74,11 @@ public:
 	bool HasTransactionUpdates() const;
 	void InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
 	                                   bool initialize_schemas = true);
+	//! Force-fetch the table from the REST catalog into the request cache.
+	void RefreshRequestCache(ClientContext &context);
+	//! RefreshRequestCache + reinitialize in place, destroying the entries in
+	//! schema_versions: only for a transaction-local copy, never for a table
+	//! version other transactions may hold entries of (IcebergTransaction::tables).
 	void RefreshFromCatalog(ClientContext &context);
 
 public:
