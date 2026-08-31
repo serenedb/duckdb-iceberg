@@ -50,7 +50,10 @@ IcebergTableInformation &IcebergTransactionAlterUpdate::CreateTable(const string
 		throw InternalException("Table %s was already created somehow?", table_key);
 	}
 
-	transaction.current_table_data.emplace(table_key, IcebergTransactionTableState(emplace_res.first->second));
+	{
+		lock_guard<mutex> guard(transaction.lock);
+		transaction.current_table_data.emplace(table_key, IcebergTransactionTableState(emplace_res.first->second));
+	}
 	return emplace_res.first->second;
 }
 

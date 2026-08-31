@@ -41,13 +41,19 @@ IcebergTransaction::~IcebergTransaction() = default;
 
 optional_ptr<CatalogEntry> IcebergTransaction::ReferenceSchema(shared_ptr<CatalogEntry> &entry) {
 	auto &ref = *entry;
-	schemas.emplace(ref, entry);
+	{
+		lock_guard<mutex> guard(lock);
+		schemas.emplace(ref, entry);
+	}
 	return ref;
 }
 
 IcebergTableInformation &IcebergTransaction::ReferenceTable(shared_ptr<IcebergTableInformation> &entry) {
 	auto &ref = *entry;
-	tables.emplace(ref, entry);
+	{
+		lock_guard<mutex> guard(lock);
+		tables.emplace(ref, entry);
+	}
 	return ref;
 }
 
@@ -723,6 +729,7 @@ bool IcebergTransaction::StartedBefore(timestamp_t timestamp_ms) const {
 }
 
 optional_ptr<IcebergTransactionTableState> IcebergTransaction::GetLatestTableState(const string &table_key) {
+	lock_guard<mutex> guard(lock);
 	auto it = current_table_data.find(table_key);
 	if (it == current_table_data.end()) {
 		return nullptr;
@@ -732,6 +739,7 @@ optional_ptr<IcebergTransactionTableState> IcebergTransaction::GetLatestTableSta
 
 IcebergTransactionTableState &IcebergTransaction::SetLatestTableState(const string &table_key,
                                                                       IcebergTableStatus status) {
+	lock_guard<mutex> guard(lock);
 	auto it = current_table_data.find(table_key);
 	if (it == current_table_data.end()) {
 		it = current_table_data.emplace(table_key, IcebergTransactionTableState(nullptr)).first;
