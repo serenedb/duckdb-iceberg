@@ -47,7 +47,11 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
 		return nullptr;
 	}
 
-	auto verify_existence = iceberg_transaction.looked_up_entries.insert(name).second;
+	bool verify_existence;
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		verify_existence = iceberg_transaction.looked_up_entries.insert(name).second;
+	}
 	auto entry = entries.find(name);
 	if (entry != entries.end()) {
 		iceberg_transaction.schemas.emplace(name, entry->second);

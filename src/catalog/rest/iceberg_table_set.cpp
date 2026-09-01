@@ -129,7 +129,10 @@ void IcebergTableSet::ScanEagerEntries(ClientContext &context, const std::functi
 	auto schedule_next = [&]() {
 		context.InterruptCheck();
 		auto &table = *entry->second;
-		transaction.tables[table.GetTableKey()] = entry->second;
+		{
+			lock_guard<mutex> guard(transaction.lock);
+			transaction.tables[table.GetTableKey()] = entry->second;
+		}
 		++entry;
 		auto load = make_uniq<PendingTableLoad>(table);
 		bool needs_load = false;
@@ -219,7 +222,10 @@ void IcebergTableSet::Scan(ClientContext &context, const std::function<void(Cata
 	auto &transaction = IcebergTransaction::Get(context, catalog);
 	for (auto &entry : entries) {
 		auto &table = *entry.second;
-		transaction.tables[table.GetTableKey()] = entry.second;
+		{
+			lock_guard<mutex> guard(transaction.lock);
+			transaction.tables[table.GetTableKey()] = entry.second;
+		}
 		callback(GetScanEntry(table));
 	}
 }
@@ -273,10 +279,12 @@ void IcebergTableSet::RenameEntry(const string &name, const string &new_name, Ic
 
 void IcebergTableSet::LoadEntriesInternal(ClientContext &context) {
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
-	bool schema_listed = iceberg_transaction.listed_schemas.find(schema.name.GetIdentifierName()) !=
-	                     iceberg_transaction.listed_schemas.end();
-	if (schema_listed) {
-		return;
+	const auto schema_name = schema.name.GetIdentifierName();
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		if (iceberg_transaction.listed_schemas.find(schema_name) != iceberg_transaction.listed_schemas.end()) {
+			return;
+		}
 	}
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	// The request owns its namespace; workers never access or mutate this table set.
@@ -287,7 +295,10 @@ void IcebergTableSet::LoadEntriesInternal(ClientContext &context) {
 		throw InterruptException();
 	}
 	ApplyListResult(std::move(tables));
-	iceberg_transaction.listed_schemas.insert(schema.name.GetIdentifierName());
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		iceberg_transaction.listed_schemas.insert(schema_name);
+	}
 }
 
 void IcebergTableSet::ApplyListResult(IcebergListTablesResult tables) {
@@ -512,7 +523,10 @@ optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, con
 		annotated_lock_guard<annotated_mutex> l(entry_lock);
 		entries[table_name] = new_version;
 	}
-	iceberg_transaction.tables[table_key] = new_version;
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		iceberg_transaction.tables[table_key] = new_version;
+	}
 	auto &state = iceberg_transaction.SetCatalogTableState(new_version);
 	if (iceberg_transaction.StartedBefore(table_info.table_metadata.last_updated_ms)) {
 		state.GetOrCreateTransactionInfo(iceberg_transaction);
@@ -525,9 +539,12 @@ optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, con
 const unordered_set<string> &IcebergTableSet::LoadViewEntries(ClientContext &context) {
 	auto &transaction = IcebergTransaction::Get(context, catalog);
 	auto &schema_name = schema.name.GetIdentifierName();
-	auto existing = transaction.listed_views.find(schema_name);
-	if (existing != transaction.listed_views.end()) {
-		return existing->second;
+	{
+		lock_guard<mutex> guard(transaction.lock);
+		auto existing = transaction.listed_views.find(schema_name);
+		if (existing != transaction.listed_views.end()) {
+			return existing->second;
+		}
 	}
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	IcebergListViewsResult views;
@@ -549,6 +566,7 @@ const unordered_set<string> &IcebergTableSet::ApplyViewListResult(ClientContext 
 			names.insert(view.name);
 		}
 	}
+	lock_guard<mutex> guard(transaction.lock);
 	return transaction.listed_views.emplace(schema.name.GetIdentifierName(), std::move(names)).first->second;
 }
 
@@ -564,17 +582,19 @@ bool IcebergTableSet::TryGetLocalViewEntry(ClientContext &context, const string 
 		return true;
 	}
 
-	auto cached_it = iceberg_transaction.views.find(view_key);
-	if (cached_it != iceberg_transaction.views.end()) {
-		entry = cached_it->second.get();
-		return true;
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		auto cached_it = iceberg_transaction.views.find(view_key);
+		if (cached_it != iceberg_transaction.views.end()) {
+			entry = cached_it->second.get();
+			return true;
+		}
 	}
 
 	if (created_it != iceberg_transaction.created_views.end()) {
 		auto view_entry = make_uniq<ViewCatalogEntry>(catalog, schema, *created_it->second);
-		auto result = view_entry.get();
-		iceberg_transaction.views.emplace(view_key, std::move(view_entry));
-		entry = result;
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		entry = iceberg_transaction.views.emplace(view_key, std::move(view_entry)).first->second.get();
 		return true;
 	}
 
@@ -686,11 +706,10 @@ optional_ptr<CatalogEntry> IcebergTableSet::ApplyViewLoadResult(ClientContext &c
 	} else {
 		view_entry = make_uniq<UnsupportedIcebergViewEntry>(catalog, schema, *view_info, unsupported_reason);
 	}
-	auto result = view_entry.get();
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
 	auto view_key = IcebergTable::GetTableKey(catalog.Cast<IcebergCatalog>(), schema.namespace_items, view_name);
-	iceberg_transaction.views.emplace(view_key, std::move(view_entry));
-	return result;
+	lock_guard<mutex> guard(iceberg_transaction.lock);
+	return iceberg_transaction.views.emplace(view_key, std::move(view_entry)).first->second.get();
 }
 
 void IcebergTableSet::ScanViews(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
