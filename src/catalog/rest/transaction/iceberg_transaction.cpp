@@ -876,6 +876,12 @@ void IcebergTransaction::DoViewDeletes(ClientContext &context) {
 	deleted_views.clear();
 }
 
+void IcebergTransaction::ReferenceTable(shared_ptr<IcebergTable> table) {
+	lock_guard<mutex> guard(lock);
+	auto &ref = *table;
+	tables.emplace(ref, std::move(table));
+}
+
 void IcebergTransaction::InvalidateViewEntry(const string &view_key) {
 	auto entry = views.find(view_key);
 	if (entry != views.end()) {
@@ -967,6 +973,7 @@ bool IcebergTransaction::StartedBefore(timestamp_ms_t timestamp_ms) const {
 }
 
 optional_ptr<IcebergTransactionTableState> IcebergTransaction::GetLatestTableState(const string &table_key) {
+	lock_guard<mutex> guard(lock);
 	auto it = current_table_data.find(table_key);
 	if (it == current_table_data.end()) {
 		return nullptr;
@@ -976,6 +983,7 @@ optional_ptr<IcebergTransactionTableState> IcebergTransaction::GetLatestTableSta
 
 IcebergTransactionTableState &IcebergTransaction::SetLatestTableState(const string &table_key,
                                                                       IcebergTableStatus status) {
+	lock_guard<mutex> guard(lock);
 	auto it = current_table_data.find(table_key);
 	if (it == current_table_data.end()) {
 		it = current_table_data.emplace(table_key, IcebergTransactionTableState()).first;
@@ -986,12 +994,14 @@ IcebergTransactionTableState &IcebergTransaction::SetLatestTableState(const stri
 
 IcebergTransactionTableState &IcebergTransaction::SetCatalogTableState(shared_ptr<IcebergTable> table) {
 	auto table_key = table->GetTableKey();
+	lock_guard<mutex> guard(lock);
 	auto result = current_table_data.emplace(table_key, IcebergTransactionTableState(std::move(table)));
 	return result.first->second;
 }
 
 IcebergTransactionTableState &
 IcebergTransaction::SetTransactionTableState(const string &table_key, IcebergTable &&table, IcebergTableStatus status) {
+	lock_guard<mutex> guard(lock);
 	auto it = current_table_data.find(table_key);
 	if (it == current_table_data.end()) {
 		it = current_table_data.emplace(table_key, IcebergTransactionTableState(std::move(table))).first;

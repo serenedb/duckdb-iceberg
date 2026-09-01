@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "catalog/rest/iceberg_schema_set.hpp"
@@ -87,6 +88,7 @@ public:
 	void DoViewCreates(ClientContext &context);
 	void DoViewDeletes(ClientContext &context);
 	void InvalidateViewEntry(const string &view_key);
+	void ReferenceTable(shared_ptr<IcebergTable> table);
 	IcebergCatalog &GetCatalog();
 	void DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
 	void DoSingleTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
@@ -135,7 +137,7 @@ public:
 	//! alive when a transaction creates a schema after referencing a stale entry with the same name.
 	unordered_map<string, shared_ptr<IcebergSchemaEntry>> created_schemas;
 	//! Tables referenced by this transaction that have to stay alive for the duration of the transaction.
-	unordered_map<string, shared_ptr<IcebergTable>> tables;
+	reference_map_t<IcebergTable, shared_ptr<IcebergTable>> tables;
 	//! The visible state of every resolved table in this transaction.
 	unordered_map<string, IcebergTransactionTableState> current_table_data;
 	//! Declared after the schema and table states so update references are destroyed before the referenced states.
