@@ -145,17 +145,22 @@ mutex &IcebergTableSet::GetEntryLock() {
 
 void IcebergTableSet::LoadEntries(ClientContext &context) {
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
-	bool schema_listed = iceberg_transaction.listed_schemas.find(schema.name.GetIdentifierName()) !=
-	                     iceberg_transaction.listed_schemas.end();
-	if (schema_listed) {
-		return;
+	const auto schema_name = schema.name.GetIdentifierName();
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		if (iceberg_transaction.listed_schemas.find(schema_name) != iceberg_transaction.listed_schemas.end()) {
+			return;
+		}
 	}
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto tables = IRCAPI::GetTables(context, ic_catalog, schema);
 	for (auto &table : tables) {
 		entries.emplace(table.name, make_shared_ptr<IcebergTableInformation>(ic_catalog, schema, table.name));
 	}
-	iceberg_transaction.listed_schemas.insert(schema.name.GetIdentifierName());
+	{
+		lock_guard<mutex> guard(iceberg_transaction.lock);
+		iceberg_transaction.listed_schemas.insert(schema_name);
+	}
 }
 
 static Value ParseTableProperty(TableFunctionBinder &binder, ClientContext &context, const ParsedExpression &expr_ref,
