@@ -148,29 +148,21 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
 	return req;
 }
 
-void IcebergTransaction::DropSecrets(ClientContext &context) {
-	auto &secret_manager = SecretManager::Get(context);
+void IcebergTransaction::DropSecrets() {
 	case_insensitive_set_t to_drop;
 	{
 		lock_guard<mutex> guard(lock);
-		to_drop = std::move(created_secrets);
-		created_secrets.clear();
+		to_drop.swap(created_secrets);
 	}
-	for (auto &secret_name : to_drop) {
-		(void)secret_manager.DropSecretByName(context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
-	}
-}
-
-void IcebergTransaction::DropTrackedSecrets() {
-	{
-		lock_guard<mutex> guard(lock);
-		if (created_secrets.empty()) {
-			return;
-		}
+	if (to_drop.empty()) {
+		return;
 	}
 	Connection temp_con(db);
 	temp_con.BeginTransaction();
-	DropSecrets(*temp_con.context);
+	auto &secret_manager = SecretManager::Get(*temp_con.context);
+	for (auto &secret_name : to_drop) {
+		secret_manager.DropSecretByName(*temp_con.context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
+	}
 	temp_con.Commit();
 }
 
@@ -419,7 +411,6 @@ static case_insensitive_set_t GetRetryTableKeys(const TableTransactionInfo &tran
 void IcebergTransaction::Commit() {
 	if (transaction_updates.empty() && created_schemas.empty() && deleted_schemas.empty() &&
 	    schema_property_updates.empty()) {
-		DropTrackedSecrets();
 		return;
 	}
 
@@ -463,12 +454,10 @@ void IcebergTransaction::Commit() {
 		ErrorData error(ex);
 		CleanupFiles();
 		temp_con.Rollback();
-		DropTrackedSecrets();
 		error.Throw("Failed to commit Iceberg transaction: ");
 	}
 
 	temp_con.Rollback();
-	DropTrackedSecrets();
 }
 
 void IcebergTransaction::DoTableUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context) {
@@ -733,7 +722,6 @@ void IcebergTransaction::CleanupFiles() {
 
 void IcebergTransaction::Rollback() {
 	CleanupFiles();
-	DropTrackedSecrets();
 }
 
 IcebergTransaction &IcebergTransaction::Get(ClientContext &context, Catalog &catalog) {

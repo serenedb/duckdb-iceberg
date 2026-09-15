@@ -24,7 +24,6 @@
 #include "core/expression/iceberg_transform.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
-#include <chrono>
 #include <climits>
 
 namespace duckdb {
@@ -166,76 +165,36 @@ static void ParseConfigOptions(const case_insensitive_map_t<string> &config, cas
 
 static constexpr int64_t VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS = 30;
 
-static int64_t VendedCredentialExpiresAt(const case_insensitive_map_t<string> &config) {
-	static constexpr const char *EXPIRES_AT_KEYS[] = {"gcs.oauth2.token-expires-at", "gcs.oauth2.token_expires_at"};
-
-	for (auto &key : EXPIRES_AT_KEYS) {
-		auto it = config.find(key);
-		if (it == config.end()) {
-			continue;
-		}
-		int64_t expires_at_millis;
-		if (!TryCast::Operation<string_t, int64_t>(string_t(it->second), expires_at_millis)) {
-			continue;
-		}
-		return expires_at_millis / 1000;
-	}
-	return 0;
-}
-
-static bool VendedCredentialExpired(const case_insensitive_map_t<string> &config, int64_t now_seconds,
-                                    bool force_expiry) {
-	auto expires_at = VendedCredentialExpiresAt(config);
-	if (expires_at == 0) {
+static bool VendedCredentialExpired(const case_insensitive_map_t<string> &config, int64_t now_seconds) {
+	auto it = config.find("gcs.oauth2.token-expires-at");
+	if (it == config.end()) {
 		return false;
 	}
-	if (force_expiry) {
-		return true;
+	int64_t expires_at_millis;
+	if (!TryCast::Operation<string_t, int64_t>(string_t(it->second), expires_at_millis) || expires_at_millis == 0) {
+		return false;
 	}
-	return now_seconds >= expires_at - VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS;
+	return now_seconds >= expires_at_millis / 1000 - VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS;
 }
 
-bool IcebergTableInformation::VendedCredentialsExpired(ClientContext &context) {
-	bool force_expiry = false;
-	Value force_expiry_value;
-	if (context.TryGetCurrentSetting("iceberg_test_force_token_expiry", force_expiry_value)) {
-		force_expiry = !force_expiry_value.IsNull() && force_expiry_value.type().id() == LogicalTypeId::BOOLEAN &&
-		               force_expiry_value.GetValue<bool>();
-	}
-
-	auto now = std::chrono::system_clock::now();
-	auto now_seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-
-	lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
-	if (VendedCredentialExpired(config, now_seconds, force_expiry)) {
+static bool VendedCredentialsExpired(const case_insensitive_map_t<string> &config,
+                                     const vector<IcebergTableStorageCredential> &credentials) {
+	auto now_seconds = Timestamp::GetEpochSeconds(Timestamp::GetCurrentTimestamp());
+	if (VendedCredentialExpired(config, now_seconds)) {
 		return true;
 	}
-	for (auto &credential : storage_credentials) {
-		if (VendedCredentialExpired(credential.config, now_seconds, force_expiry)) {
+	for (auto &credential : credentials) {
+		if (VendedCredentialExpired(credential.config, now_seconds)) {
 			return true;
 		}
 	}
 	return false;
 }
 
-void IcebergTableInformation::RefreshVendedCredentials(ClientContext &context) {
-	RefreshRequestCache(context);
-
-	auto table_key = GetTableKey();
-	lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
-	auto cached_table_result = catalog.table_request_cache.Get(context, table_key, cache_lock, false);
-	D_ASSERT(cached_table_result);
-	InitializeCredentialsFromLoadTableResult(*cached_table_result->load_table_result);
-}
-
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
 	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
 	auto &transaction = IcebergTransaction::Get(context, catalog);
-
-	if (VendedCredentialsExpired(context)) {
-		RefreshVendedCredentials(context);
-	}
 
 	case_insensitive_map_t<string> table_config;
 	vector<IcebergTableStorageCredential> table_storage_credentials;
@@ -245,12 +204,18 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		table_storage_credentials = storage_credentials;
 	}
 
+	if (VendedCredentialsExpired(table_config, table_storage_credentials)) {
+		RefreshRequestCache(context);
+		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+		auto cached_table_result = catalog.table_request_cache.Get(context, GetTableKey(), cache_lock, false);
+		D_ASSERT(cached_table_result);
+		InitializeCredentialsFromLoadTableResult(*cached_table_result->load_table_result);
+		table_config = config;
+		table_storage_credentials = storage_credentials;
+	}
+
 	auto secret_base_name =
 	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
-	auto track_secret = [&transaction](const string &secret_name) {
-		lock_guard<mutex> guard(transaction.lock);
-		transaction.created_secrets.insert(secret_name);
-	};
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
@@ -320,7 +285,6 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		}
 		create_secret_input.name =
 		    Identifier(StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix));
-		track_secret(create_secret_input.name.GetIdentifierName());
 
 		create_secret_input.type = Identifier(storage_type);
 		create_secret_input.provider = "config";
@@ -342,10 +306,19 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		//! TODO: apply the 'overrides' retrieved from the /v1/config endpoint
 		config.options = config_options;
 		config.name = Identifier(secret_base_name);
-		track_secret(secret_base_name);
 		config.type = Identifier(storage_type);
 		config.provider = "config";
 		config.storage_type = "memory";
+	}
+
+	{
+		lock_guard<mutex> guard(transaction.lock);
+		for (auto &storage_credential : result.storage_credentials) {
+			transaction.created_secrets.insert(storage_credential.name.GetIdentifierName());
+		}
+		if (result.config) {
+			transaction.created_secrets.insert(result.config->name.GetIdentifierName());
+		}
 	}
 
 	return result;

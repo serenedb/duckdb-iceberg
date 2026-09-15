@@ -52,8 +52,6 @@ public:
 	                                               const IcebergTableSchema &schema, int32_t spec_id,
 	                                               idx_t base_partition_field_id);
 	IRCAPITableCredentials GetVendedCredentials(ClientContext &context);
-	bool VendedCredentialsExpired(ClientContext &context);
-	void RefreshVendedCredentials(ClientContext &context);
 	const string &BaseFilePath() const;
 
 	IcebergTransactionData &GetOrCreateTransactionData(IcebergTransaction &transaction);
