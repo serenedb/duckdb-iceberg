@@ -24,6 +24,7 @@
 #include "core/expression/iceberg_transform.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
+#include <chrono>
 #include <climits>
 
 namespace duckdb {
@@ -163,10 +164,86 @@ static void ParseConfigOptions(const case_insensitive_map_t<string> &config, cas
 	endpoint_it->second = endpoint;
 }
 
+static constexpr int64_t VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS = 30;
+
+static int64_t VendedCredentialExpiresAt(const case_insensitive_map_t<string> &config) {
+	static constexpr const char *EXPIRES_AT_KEYS[] = {"gcs.oauth2.token-expires-at", "gcs.oauth2.token_expires_at"};
+
+	for (auto &key : EXPIRES_AT_KEYS) {
+		auto it = config.find(key);
+		if (it == config.end()) {
+			continue;
+		}
+		int64_t expires_at_millis;
+		if (!TryCast::Operation<string_t, int64_t>(string_t(it->second), expires_at_millis)) {
+			continue;
+		}
+		return expires_at_millis / 1000;
+	}
+	return 0;
+}
+
+static bool VendedCredentialExpired(const case_insensitive_map_t<string> &config, int64_t now_seconds,
+                                    bool force_expiry) {
+	auto expires_at = VendedCredentialExpiresAt(config);
+	if (expires_at == 0) {
+		return false;
+	}
+	if (force_expiry) {
+		return true;
+	}
+	return now_seconds >= expires_at - VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS;
+}
+
+bool IcebergTableInformation::VendedCredentialsExpired(ClientContext &context) {
+	bool force_expiry = false;
+	Value force_expiry_value;
+	if (context.TryGetCurrentSetting("iceberg_test_force_token_expiry", force_expiry_value)) {
+		force_expiry = !force_expiry_value.IsNull() && force_expiry_value.type().id() == LogicalTypeId::BOOLEAN &&
+		               force_expiry_value.GetValue<bool>();
+	}
+
+	auto now = std::chrono::system_clock::now();
+	auto now_seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+
+	lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+	if (VendedCredentialExpired(config, now_seconds, force_expiry)) {
+		return true;
+	}
+	for (auto &credential : storage_credentials) {
+		if (VendedCredentialExpired(credential.config, now_seconds, force_expiry)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void IcebergTableInformation::RefreshVendedCredentials(ClientContext &context) {
+	RefreshRequestCache(context);
+
+	auto table_key = GetTableKey();
+	lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+	auto cached_table_result = catalog.table_request_cache.Get(context, table_key, cache_lock, false);
+	D_ASSERT(cached_table_result);
+	InitializeCredentialsFromLoadTableResult(*cached_table_result->load_table_result);
+}
+
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
 	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
 	auto &transaction = IcebergTransaction::Get(context, catalog);
+
+	if (VendedCredentialsExpired(context)) {
+		RefreshVendedCredentials(context);
+	}
+
+	case_insensitive_map_t<string> table_config;
+	vector<IcebergTableStorageCredential> table_storage_credentials;
+	{
+		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+		table_config = config;
+		table_storage_credentials = storage_credentials;
+	}
 
 	auto secret_base_name =
 	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
@@ -212,13 +289,13 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 	auto schema_component = IRCPathComponent::NamespaceComponent(schema.namespace_items);
 	auto key = schema_component.encoded + "." + name;
 
-	ParseConfigOptions(config, config_options, context, storage_type);
+	ParseConfigOptions(table_config, config_options, context, storage_type);
 
 	//! If there is only one credential listed, we don't really care about the prefix,
 	//! we can use the table_location instead.
-	const bool ignore_credential_prefix = storage_credentials.size() == 1;
-	for (idx_t index = 0; index < storage_credentials.size(); index++) {
-		auto &credential = storage_credentials[index];
+	const bool ignore_credential_prefix = table_storage_credentials.size() == 1;
+	for (idx_t index = 0; index < table_storage_credentials.size(); index++) {
+		auto &credential = table_storage_credentials[index];
 
 		//! Only use credentials whose prefix matches the storage type (e.g. "s3"),
 		//! matching Iceberg Java S3FileIO behavior: filter(c -> c.prefix().startsWith(ROOT_PREFIX))
@@ -725,9 +802,8 @@ IcebergTransactionData &IcebergTableInformation::GetOrCreateTransactionData(Iceb
 	return *transaction_data;
 }
 
-void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
-                                                            bool initialize_schemas) {
-	table_metadata = IcebergTableMetadata::FromTableMetadata(load_table_result.metadata);
+void IcebergTableInformation::InitializeCredentialsFromLoadTableResult(
+    const rest_api_objects::LoadTableResult &load_table_result) {
 	if (auto &val = load_table_result.config) {
 		config = *val;
 	}
@@ -738,6 +814,12 @@ void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objec
 			storage_credentials.push_back(credential);
 		}
 	}
+}
+
+void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
+                                                            bool initialize_schemas) {
+	table_metadata = IcebergTableMetadata::FromTableMetadata(load_table_result.metadata);
+	InitializeCredentialsFromLoadTableResult(load_table_result);
 	latest_metadata_json = load_table_result.metadata_location.value_or("");
 
 	if (initialize_schemas) {

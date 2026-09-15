@@ -52,6 +52,8 @@ public:
 	                                               const IcebergTableSchema &schema, int32_t spec_id,
 	                                               idx_t base_partition_field_id);
 	IRCAPITableCredentials GetVendedCredentials(ClientContext &context);
+	bool VendedCredentialsExpired(ClientContext &context);
+	void RefreshVendedCredentials(ClientContext &context);
 	const string &BaseFilePath() const;
 
 	IcebergTransactionData &GetOrCreateTransactionData(IcebergTransaction &transaction);
@@ -72,6 +74,7 @@ public:
 	IcebergSnapshotLookup GetSnapshotLookup(ClientContext &context) const;
 	bool TableIsEmpty(const IcebergSnapshotLookup &snapshot_lookup) const;
 	bool HasTransactionUpdates() const;
+	void InitializeCredentialsFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result);
 	void InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
 	                                   bool initialize_schemas = true);
 	//! Force-fetch the table from the REST catalog into the request cache.

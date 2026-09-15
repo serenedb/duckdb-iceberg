@@ -415,6 +415,9 @@ CommitResult IRCAPI::CommitMultiTableUpdate(ClientContext &context, IcebergCatal
 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("commit"));
 	HTTPHeaders headers(*context.db);
 	headers.Insert("Content-Type", "application/json");
+	if (catalog.attach_options.access_mode == IRCAccessDelegationMode::VENDED_CREDENTIALS) {
+		headers.Insert("X-Iceberg-Access-Delegation", "vended-credentials");
+	}
 	LogPostBody(context, url_builder, body);
 	auto response = catalog.auth_handler->Request(RequestType::POST_REQUEST, context, url_builder, headers, body);
 	return BuildCommitResult(context, response);
@@ -430,6 +433,9 @@ CommitResult IRCAPI::CommitTableUpdate(ClientContext &context, IcebergCatalog &c
 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent(table));
 	HTTPHeaders headers(*context.db);
 	headers.Insert("Content-Type", "application/json");
+	if (catalog.attach_options.access_mode == IRCAccessDelegationMode::VENDED_CREDENTIALS) {
+		headers.Insert("X-Iceberg-Access-Delegation", "vended-credentials");
+	}
 	LogPostBody(context, url_builder, body);
 	auto response = catalog.auth_handler->Request(RequestType::POST_REQUEST, context, url_builder, headers, body);
 	return BuildCommitResult(context, response);
