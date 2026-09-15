@@ -247,10 +247,10 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 
 	auto secret_base_name =
 	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
-	{
+	auto track_secret = [&transaction](const string &secret_name) {
 		lock_guard<mutex> guard(transaction.lock);
-		transaction.created_secrets.insert(secret_base_name);
-	}
+		transaction.created_secrets.insert(secret_name);
+	};
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
@@ -320,6 +320,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		}
 		create_secret_input.name =
 		    Identifier(StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix));
+		track_secret(create_secret_input.name.GetIdentifierName());
 
 		create_secret_input.type = Identifier(storage_type);
 		create_secret_input.provider = "config";
@@ -341,6 +342,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		//! TODO: apply the 'overrides' retrieved from the /v1/config endpoint
 		config.options = config_options;
 		config.name = Identifier(secret_base_name);
+		track_secret(secret_base_name);
 		config.type = Identifier(storage_type);
 		config.provider = "config";
 		config.storage_type = "memory";

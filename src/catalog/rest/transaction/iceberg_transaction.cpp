@@ -150,9 +150,28 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
 
 void IcebergTransaction::DropSecrets(ClientContext &context) {
 	auto &secret_manager = SecretManager::Get(context);
-	for (auto &secret_name : created_secrets) {
+	case_insensitive_set_t to_drop;
+	{
+		lock_guard<mutex> guard(lock);
+		to_drop = std::move(created_secrets);
+		created_secrets.clear();
+	}
+	for (auto &secret_name : to_drop) {
 		(void)secret_manager.DropSecretByName(context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
 	}
+}
+
+void IcebergTransaction::DropTrackedSecrets() {
+	{
+		lock_guard<mutex> guard(lock);
+		if (created_secrets.empty()) {
+			return;
+		}
+	}
+	Connection temp_con(db);
+	temp_con.BeginTransaction();
+	DropSecrets(*temp_con.context);
+	temp_con.Commit();
 }
 
 static rest_api_objects::TableUpdate CreateSetSnapshotRefUpdate(int64_t snapshot_id) {
@@ -400,6 +419,7 @@ static case_insensitive_set_t GetRetryTableKeys(const TableTransactionInfo &tran
 void IcebergTransaction::Commit() {
 	if (transaction_updates.empty() && created_schemas.empty() && deleted_schemas.empty() &&
 	    schema_property_updates.empty()) {
+		DropTrackedSecrets();
 		return;
 	}
 
@@ -442,12 +462,13 @@ void IcebergTransaction::Commit() {
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		CleanupFiles();
-		DropSecrets(*temp_con_context);
 		temp_con.Rollback();
+		DropTrackedSecrets();
 		error.Throw("Failed to commit Iceberg transaction: ");
 	}
 
 	temp_con.Rollback();
+	DropTrackedSecrets();
 }
 
 void IcebergTransaction::DoTableUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context) {
@@ -466,7 +487,6 @@ void IcebergTransaction::DoTableUpdates(IcebergTransactionAlterUpdate &alter_upd
 			ic_catalog.table_request_cache.Expire(context, it);
 		}
 	}
-	DropSecrets(context);
 }
 
 void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_update, ClientContext &context) {
@@ -713,6 +733,7 @@ void IcebergTransaction::CleanupFiles() {
 
 void IcebergTransaction::Rollback() {
 	CleanupFiles();
+	DropTrackedSecrets();
 }
 
 IcebergTransaction &IcebergTransaction::Get(ClientContext &context, Catalog &catalog) {

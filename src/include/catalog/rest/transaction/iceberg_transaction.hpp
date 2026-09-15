@@ -88,6 +88,7 @@ public:
 	void DoSchemaPropertyUpdates(ClientContext &context);
 	IcebergCatalog &GetCatalog();
 	void DropSecrets(ClientContext &context);
+	void DropTrackedSecrets();
 	TableTransactionInfo GetTransactionRequest(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
 	void DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
 	void DoSingleTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update, ClientContext &context);
