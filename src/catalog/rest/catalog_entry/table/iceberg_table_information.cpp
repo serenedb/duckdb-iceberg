@@ -163,17 +163,59 @@ static void ParseConfigOptions(const case_insensitive_map_t<string> &config, cas
 	endpoint_it->second = endpoint;
 }
 
+static constexpr int64_t VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS = 30;
+
+static bool VendedCredentialExpired(const case_insensitive_map_t<string> &config, int64_t now_seconds) {
+	auto it = config.find("gcs.oauth2.token-expires-at");
+	if (it == config.end()) {
+		return false;
+	}
+	int64_t expires_at_millis;
+	if (!TryCast::Operation<string_t, int64_t>(string_t(it->second), expires_at_millis) || expires_at_millis == 0) {
+		return false;
+	}
+	return now_seconds >= expires_at_millis / 1000 - VENDED_CREDENTIAL_EXPIRY_BUFFER_SECONDS;
+}
+
+static bool VendedCredentialsExpired(const case_insensitive_map_t<string> &config,
+                                     const vector<IcebergTableStorageCredential> &credentials) {
+	auto now_seconds = Timestamp::GetEpochSeconds(Timestamp::GetCurrentTimestamp());
+	if (VendedCredentialExpired(config, now_seconds)) {
+		return true;
+	}
+	for (auto &credential : credentials) {
+		if (VendedCredentialExpired(credential.config, now_seconds)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
 	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
 	auto &transaction = IcebergTransaction::Get(context, catalog);
 
+	case_insensitive_map_t<string> table_config;
+	vector<IcebergTableStorageCredential> table_storage_credentials;
+	{
+		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+		table_config = config;
+		table_storage_credentials = storage_credentials;
+	}
+
+	if (VendedCredentialsExpired(table_config, table_storage_credentials)) {
+		RefreshRequestCache(context);
+		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
+		auto cached_table_result = catalog.table_request_cache.Get(context, GetTableKey(), cache_lock, false);
+		D_ASSERT(cached_table_result);
+		InitializeCredentialsFromLoadTableResult(*cached_table_result->load_table_result);
+		table_config = config;
+		table_storage_credentials = storage_credentials;
+	}
+
 	auto secret_base_name =
 	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
-	{
-		lock_guard<mutex> guard(transaction.lock);
-		transaction.created_secrets.insert(secret_base_name);
-	}
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
@@ -212,13 +254,13 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 	auto schema_component = IRCPathComponent::NamespaceComponent(schema.namespace_items);
 	auto key = schema_component.encoded + "." + name;
 
-	ParseConfigOptions(config, config_options, context, storage_type);
+	ParseConfigOptions(table_config, config_options, context, storage_type);
 
 	//! If there is only one credential listed, we don't really care about the prefix,
 	//! we can use the table_location instead.
-	const bool ignore_credential_prefix = storage_credentials.size() == 1;
-	for (idx_t index = 0; index < storage_credentials.size(); index++) {
-		auto &credential = storage_credentials[index];
+	const bool ignore_credential_prefix = table_storage_credentials.size() == 1;
+	for (idx_t index = 0; index < table_storage_credentials.size(); index++) {
+		auto &credential = table_storage_credentials[index];
 
 		//! Only use credentials whose prefix matches the storage type (e.g. "s3"),
 		//! matching Iceberg Java S3FileIO behavior: filter(c -> c.prefix().startsWith(ROOT_PREFIX))
@@ -267,6 +309,16 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		config.type = Identifier(storage_type);
 		config.provider = "config";
 		config.storage_type = "memory";
+	}
+
+	{
+		lock_guard<mutex> guard(transaction.lock);
+		for (auto &storage_credential : result.storage_credentials) {
+			transaction.created_secrets.insert(storage_credential.name.GetIdentifierName());
+		}
+		if (result.config) {
+			transaction.created_secrets.insert(result.config->name.GetIdentifierName());
+		}
 	}
 
 	return result;
@@ -725,9 +777,8 @@ IcebergTransactionData &IcebergTableInformation::GetOrCreateTransactionData(Iceb
 	return *transaction_data;
 }
 
-void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
-                                                            bool initialize_schemas) {
-	table_metadata = IcebergTableMetadata::FromTableMetadata(load_table_result.metadata);
+void IcebergTableInformation::InitializeCredentialsFromLoadTableResult(
+    const rest_api_objects::LoadTableResult &load_table_result) {
 	if (auto &val = load_table_result.config) {
 		config = *val;
 	}
@@ -738,6 +789,12 @@ void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objec
 			storage_credentials.push_back(credential);
 		}
 	}
+}
+
+void IcebergTableInformation::InitializeFromLoadTableResult(const rest_api_objects::LoadTableResult &load_table_result,
+                                                            bool initialize_schemas) {
+	table_metadata = IcebergTableMetadata::FromTableMetadata(load_table_result.metadata);
+	InitializeCredentialsFromLoadTableResult(load_table_result);
 	latest_metadata_json = load_table_result.metadata_location.value_or("");
 
 	if (initialize_schemas) {

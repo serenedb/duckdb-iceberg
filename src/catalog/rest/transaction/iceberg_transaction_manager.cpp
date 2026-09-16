@@ -21,8 +21,10 @@ ErrorData IcebergTransactionManager::CommitTransaction(ClientContext &context, T
 	try {
 		ic_transaction.Commit();
 	} catch (std::exception &ex) {
+		ic_transaction.DropSecrets();
 		return ErrorData(ex);
 	}
+	ic_transaction.DropSecrets();
 	lock_guard<mutex> l(transaction_lock);
 	transactions.erase(transaction);
 	return ErrorData();
@@ -31,6 +33,7 @@ ErrorData IcebergTransactionManager::CommitTransaction(ClientContext &context, T
 void IcebergTransactionManager::RollbackTransaction(Transaction &transaction) {
 	auto &ic_transaction = transaction.Cast<IcebergTransaction>();
 	ic_transaction.Rollback();
+	ic_transaction.DropSecrets();
 	lock_guard<mutex> l(transaction_lock);
 	transactions.erase(transaction);
 }
