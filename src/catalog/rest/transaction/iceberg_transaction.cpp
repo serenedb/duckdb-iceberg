@@ -34,7 +34,8 @@ IcebergTransactionTableState::IcebergTransactionTableState(optional_ptr<IcebergT
 }
 
 IcebergTransaction::IcebergTransaction(IcebergCatalog &ic_catalog, TransactionManager &manager, ClientContext &context)
-    : Transaction(manager, context), db(*context.db), catalog(ic_catalog), access_mode(ic_catalog.access_mode) {
+    : Transaction(manager, context), db(*context.db), catalog(ic_catalog), access_mode(ic_catalog.access_mode),
+      secret_prefix(InternalCredentialSecretPrefix(MetaTransaction::Get(context).global_transaction_id)) {
 }
 
 IcebergTransaction::~IcebergTransaction() = default;
@@ -148,22 +149,21 @@ static rest_api_objects::TableRequirement CreateAssertNoSnapshotRequirement() {
 	return req;
 }
 
+void DropInternalCredentialSecrets(DatabaseInstance &db, const string &prefix) {
+	auto catalog_transaction = CatalogTransaction::GetCommittedTransaction(db);
+	auto &secret_manager = db.GetSecretManager();
+	for (auto &secret : secret_manager.AllSecrets(catalog_transaction)) {
+		auto secret_name = secret.secret->GetName().GetIdentifierName();
+		if (!StringUtil::StartsWith(secret_name, prefix)) {
+			continue;
+		}
+		secret_manager.DropSecretByName(catalog_transaction, Identifier(secret_name), OnEntryNotFound::RETURN_NULL,
+		                                SecretPersistType::TEMPORARY);
+	}
+}
+
 void IcebergTransaction::DropSecrets() {
-	case_insensitive_set_t to_drop;
-	{
-		lock_guard<mutex> guard(lock);
-		to_drop.swap(created_secrets);
-	}
-	if (to_drop.empty()) {
-		return;
-	}
-	Connection temp_con(db);
-	temp_con.BeginTransaction();
-	auto &secret_manager = SecretManager::Get(*temp_con.context);
-	for (auto &secret_name : to_drop) {
-		secret_manager.DropSecretByName(*temp_con.context, Identifier(secret_name), OnEntryNotFound::RETURN_NULL);
-	}
-	temp_con.Commit();
+	DropInternalCredentialSecrets(db, secret_prefix);
 }
 
 static rest_api_objects::TableUpdate CreateSetSnapshotRefUpdate(int64_t snapshot_id) {
@@ -408,6 +408,21 @@ static case_insensitive_set_t GetRetryTableKeys(const TableTransactionInfo &tran
 	return table_keys;
 }
 
+//! A helper connection vends its own credentials, under its own transaction id, so it clears them itself.
+struct InternalCredentialScope {
+public:
+	InternalCredentialScope(DatabaseInstance &db, ClientContext &context)
+	    : db(db), prefix(InternalCredentialSecretPrefix(MetaTransaction::Get(context).global_transaction_id)) {
+	}
+	~InternalCredentialScope() {
+		DropInternalCredentialSecrets(db, prefix);
+	}
+
+private:
+	DatabaseInstance &db;
+	string prefix;
+};
+
 void IcebergTransaction::Commit() {
 	if (transaction_updates.empty() && created_schemas.empty() && deleted_schemas.empty() &&
 	    schema_property_updates.empty()) {
@@ -417,6 +432,7 @@ void IcebergTransaction::Commit() {
 	Connection temp_con(db);
 	temp_con.BeginTransaction();
 	auto &temp_con_context = temp_con.context;
+	InternalCredentialScope credential_scope(db, *temp_con_context);
 
 	// Copy user settings from the original context so that e.g. s3_access_key_id are available
 	if (!this->context.expired()) {
@@ -646,13 +662,15 @@ namespace {
 
 struct ScopedTransaction {
 public:
-	ScopedTransaction(DatabaseInstance &db) : connection(db) {
+	ScopedTransaction(DatabaseInstance &db) : db(db), connection(db) {
 		connection.BeginTransaction();
+		secret_prefix = InternalCredentialSecretPrefix(MetaTransaction::Get(*connection.context).global_transaction_id);
 	}
 	~ScopedTransaction() {
 		//! Prevent the connection from destructing with an active transaction
 		//! As that causes it to ROLLBACK and enter CleanupFiles - resulting in a stack overflow due to recursion
 		connection.Commit();
+		DropInternalCredentialSecrets(db, secret_prefix);
 	}
 
 public:
@@ -661,7 +679,9 @@ public:
 	}
 
 public:
+	DatabaseInstance &db;
 	Connection connection;
+	string secret_prefix;
 };
 
 } // namespace

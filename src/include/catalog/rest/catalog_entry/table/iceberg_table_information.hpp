@@ -33,6 +33,10 @@ public:
 	case_insensitive_map_t<string> config;
 };
 
+string InternalCredentialSecretPrefix(transaction_t transaction_id);
+void NameInternalCredentialSecret(CreateSecretInput &input, const string &prefix, const string &slot,
+                                  const string &table_key);
+
 struct IcebergTableInformation {
 public:
 	IcebergTableInformation(IcebergCatalog &catalog, IcebergSchemaEntry &schema, const string &name);
