@@ -193,8 +193,6 @@ static bool VendedCredentialsExpired(const case_insensitive_map_t<string> &confi
 
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
-	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
-	auto &transaction = IcebergTransaction::Get(context, catalog);
 
 	case_insensitive_map_t<string> table_config;
 	vector<IcebergTableStorageCredential> table_storage_credentials;
@@ -214,8 +212,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		table_storage_credentials = storage_credentials;
 	}
 
-	auto secret_base_name =
-	    StringUtil::Format("__internal_ic_%s__%s__%s__%s", table_id, schema.name, name, to_string(transaction_id));
+	auto secret_base_name = StringUtil::Format("__internal_ic_%s__%s__%s", table_id, schema.name, name);
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
@@ -309,16 +306,6 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		config.type = Identifier(storage_type);
 		config.provider = "config";
 		config.storage_type = "memory";
-	}
-
-	{
-		lock_guard<mutex> guard(transaction.lock);
-		for (auto &storage_credential : result.storage_credentials) {
-			transaction.created_secrets.insert(storage_credential.name.GetIdentifierName());
-		}
-		if (result.config) {
-			transaction.created_secrets.insert(result.config->name.GetIdentifierName());
-		}
 	}
 
 	return result;
