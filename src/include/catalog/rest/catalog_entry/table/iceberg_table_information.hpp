@@ -19,7 +19,13 @@ struct IcebergManifestEntry;
 struct IRCAPITableCredentials {
 	unique_ptr<CreateSecretInput> config;
 	vector<CreateSecretInput> storage_credentials;
+	//! Whether these credentials were just re-vended, so a registered secret for the same scope is stale
+	bool refreshed = false;
 };
+
+//! Name an internal credential secret after the storage path it unlocks, so the same path reuses one secret
+//! instead of accumulating one per transaction. Falls back to the given name when there is no scope.
+void NameInternalCredentialSecret(CreateSecretInput &input, const string &fallback_name);
 
 struct IcebergTableStorageCredential {
 public:

@@ -191,6 +191,14 @@ static bool VendedCredentialsExpired(const case_insensitive_map_t<string> &confi
 	return false;
 }
 
+void NameInternalCredentialSecret(CreateSecretInput &input, const string &fallback_name) {
+	if (input.scope.empty()) {
+		input.name = Identifier(fallback_name);
+		return;
+	}
+	input.name = Identifier("__internal_ic_" + input.scope[0]);
+}
+
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
 
@@ -202,7 +210,8 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		table_storage_credentials = storage_credentials;
 	}
 
-	if (VendedCredentialsExpired(table_config, table_storage_credentials)) {
+	result.refreshed = VendedCredentialsExpired(table_config, table_storage_credentials);
+	if (result.refreshed) {
 		RefreshRequestCache(context);
 		lock_guard<mutex> cache_lock(catalog.table_request_cache.Lock());
 		auto cached_table_result = catalog.table_request_cache.Get(context, GetTableKey(), cache_lock, false);
@@ -280,8 +289,8 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 				create_secret_input.scope.push_back(table_location);
 			}
 		}
-		create_secret_input.name =
-		    Identifier(StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix));
+		NameInternalCredentialSecret(create_secret_input,
+		                             StringUtil::Format("%s_%d_%s", secret_base_name, index, credential.prefix));
 
 		create_secret_input.type = Identifier(storage_type);
 		create_secret_input.provider = "config";

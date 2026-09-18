@@ -47,6 +47,18 @@ void AddHTTPSecretsToOptions(SecretEntry &http_secret_entry, case_insensitive_ma
 	                            : http_kv_secret.TryGetValue("verify_ssl").DefaultCastAs(LogicalType::BOOLEAN);
 }
 
+//! A vended credential outlives the statement that fetched it and is shared by every reader of the same path, so it
+//! is registered through a committed transaction: an entry written that way is visible to transactions that started
+//! before it, and concurrent readers of one table do not conflict over creating it.
+static void RegisterInternalCredential(ClientContext &context, SecretManager &secret_manager, CreateSecretInput &info,
+                                       bool credentials_refreshed) {
+	auto transaction = CatalogTransaction::GetCommittedTransaction(*context.db);
+	if (!credentials_refreshed && secret_manager.GetSecretByName(transaction, info.name.GetIdentifierName())) {
+		return;
+	}
+	(void)secret_manager.CreateSecret(context, info, transaction);
+}
+
 void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) const {
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &secret_manager = SecretManager::Get(context);
@@ -144,7 +156,8 @@ void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) cons
 			AddHTTPSecretsToOptions(*http_secret_entry, info.options);
 		}
 
-		(void)secret_manager.CreateSecret(context, info);
+		NameInternalCredentialSecret(info, info.name.GetIdentifierName());
+		RegisterInternalCredential(context, secret_manager, info, table_credentials.refreshed);
 		// if there is no key_id, secret, token (S3/GCS) or account_name, connection_string (Azure) in the info,
 		// log that vended credentials has not worked
 		bool has_s3_creds = info.options.find("key_id") != info.options.end() ||
@@ -162,7 +175,7 @@ void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) cons
 			if (http_secret_entry) {
 				AddHTTPSecretsToOptions(*http_secret_entry, info.options);
 			}
-			(void)secret_manager.CreateSecret(context, info);
+			RegisterInternalCredential(context, secret_manager, info, table_credentials.refreshed);
 		}
 	}
 }
