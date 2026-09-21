@@ -245,9 +245,14 @@ IcebergMultiFileListSharedState::IcebergMultiFileListSharedState(ClientContext &
 }
 
 IcebergMultiFileListSharedState::~IcebergMultiFileListSharedState() {
-	if (data_manifest_read_state) {
-		//! FIXME: this could throw, if the tasks encountered an error
+	if (!data_manifest_read_state) {
+		return;
+	}
+	try {
+		//! Drains the outstanding tasks; a failure among them is reported to
+		//! whoever waited on the scan, and must not escape this destructor.
 		data_manifest_read_state->executor.WorkOnTasks();
+	} catch (...) { // NOLINT: a throwing destructor terminates the process
 	}
 }
 
