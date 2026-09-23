@@ -41,92 +41,99 @@ static unique_ptr<FunctionData> IcebergBucketBind(BindScalarFunctionInput &input
 	return nullptr;
 }
 
+static int32_t IcebergBucketOf(int32_t n, int32_t hash) {
+	if (n <= 0) {
+		throw InvalidInputException("iceberg_bucket: modulo must be a positive integer, got %d", n);
+	}
+	return (hash & 0x7FFFFFFF) % n;
+}
+
 static void IcebergBucketInteger(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, int32_t val) -> int32_t { return (IcebergHash::HashInt32(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, int32_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashInt32(val)); });
 }
 
 static void IcebergBucketBigInt(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int64_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, int64_t val) -> int32_t { return (IcebergHash::HashInt64(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, int64_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashInt64(val)); });
 }
 
 static void IcebergBucketVarchar(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, string_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, string_t val) -> int32_t { return (IcebergHash::HashString(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, string_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashString(val)); });
 }
 
 static void IcebergBucketBlob(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, string_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(), [](int32_t n, string_t val) -> int32_t {
 		    int32_t h = IcebergHash::Murmur3Hash32(reinterpret_cast<const uint8_t *>(val.GetData()), val.GetSize(), 0);
-		    return (h & 0x7FFFFFFF) % n;
+		    return IcebergBucketOf(n, h);
 	    });
 }
 
 static void IcebergBucketDate(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, date_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, date_t val) -> int32_t { return (IcebergHash::HashDate(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, date_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashDate(val)); });
 }
 
 static void IcebergBucketTimestamp(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, timestamp_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, timestamp_t val) -> int32_t { return (IcebergHash::HashInt64(val.value) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, timestamp_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashInt64(val.value)); });
 }
 
 static void IcebergBucketTimestampTz(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, timestamp_tz_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, timestamp_tz_t val) -> int32_t { return (IcebergHash::HashInt64(val.value) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, timestamp_tz_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashInt64(val.value)); });
 }
 
 static void IcebergBucketTimestampNs(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, timestamp_ns_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, timestamp_ns_t val) -> int32_t { return (IcebergHash::HashTimestampNs(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, timestamp_ns_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashTimestampNs(val)); });
 }
 
 static void IcebergBucketTime(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, dtime_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, dtime_t val) -> int32_t { return (IcebergHash::HashTime(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, dtime_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashTime(val)); });
 }
 
 static void IcebergBucketUUID(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, hugeint_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, hugeint_t val) -> int32_t { return (IcebergHash::HashUUID(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, hugeint_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashUUID(val)); });
 }
 
 static void IcebergBucketDecimalInt16(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int16_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(), [](int32_t n, int16_t val) -> int32_t {
-		    return (IcebergHash::HashDecimalInt64(static_cast<int64_t>(val)) & 0x7FFFFFFF) % n;
+		    return IcebergBucketOf(n, IcebergHash::HashDecimalInt64(static_cast<int64_t>(val)));
 	    });
 }
 
 static void IcebergBucketDecimalInt32(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(), [](int32_t n, int32_t val) -> int32_t {
-		    return (IcebergHash::HashDecimalInt64(static_cast<int64_t>(val)) & 0x7FFFFFFF) % n;
+		    return IcebergBucketOf(n, IcebergHash::HashDecimalInt64(static_cast<int64_t>(val)));
 	    });
 }
 
 static void IcebergBucketDecimalInt64(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int64_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, int64_t val) -> int32_t { return (IcebergHash::HashDecimalInt64(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, int64_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashDecimalInt64(val)); });
 }
 
 static void IcebergBucketDecimalHugeInt(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, hugeint_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t n, hugeint_t val) -> int32_t { return (IcebergHash::HashDecimalHugeInt(val) & 0x7FFFFFFF) % n; });
+	    [](int32_t n, hugeint_t val) -> int32_t { return IcebergBucketOf(n, IcebergHash::HashDecimalHugeInt(val)); });
 }
 
 static unique_ptr<FunctionData> IcebergBucketDecimalBind(BindScalarFunctionInput &input) {

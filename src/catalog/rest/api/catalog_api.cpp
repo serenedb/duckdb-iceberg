@@ -534,7 +534,7 @@ void IRCAPI::CommitNamespacePropertiesUpdate(ClientContext &context, IcebergCata
 
 rest_api_objects::LoadTableResult IRCAPI::CommitNewTable(ClientContext &context, IcebergCatalog &catalog,
                                                          const IcebergTableEntry &table) {
-	auto &ic_schema = table.ParentSchema().Cast<IcebergSchemaEntry>();
+	auto &ic_schema = table.ParentSchema(context).Cast<IcebergSchemaEntry>();
 	auto url_builder = catalog.GetBaseUrl();
 	url_builder.AddPrefixComponent(catalog.prefix, catalog.prefix_is_one_component);
 	url_builder.AddPathComponent(IRCPathComponent::RegularComponent("namespaces"));
