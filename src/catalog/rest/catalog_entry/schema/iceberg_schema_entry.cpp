@@ -292,6 +292,11 @@ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<Ice
 }
 
 void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+	if (info.type == AlterType::RENAME && info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		RenameTableInfo rename(info.GetAlterEntryData(), info.Cast<RenameInfo>().new_name);
+		Alter(transaction, rename);
+		return;
+	}
 	if (info.type != AlterType::ALTER_TABLE) {
 		throw NotImplementedException("Only ALTER TABLE is supported for Iceberg");
 	}

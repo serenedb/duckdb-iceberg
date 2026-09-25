@@ -140,3 +140,13 @@ statement error
 SELECT iceberg_bucket(0, 1000);
 ----
 <REGEX>:.*modulo must be a positive integer.*
+
+statement error
+SELECT iceberg_bucket(n, 1000) FROM (VALUES (0)) t(n);
+----
+<REGEX>:.*modulo must be a positive integer.*
+
+statement error
+SELECT iceberg_bucket(n, 'iceberg') FROM (VALUES (-3)) t(n);
+----
+<REGEX>:.*modulo must be a positive integer.*
