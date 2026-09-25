@@ -1287,8 +1287,7 @@ void IcebergMultiFileList::InitializeSharedState(lock_guard<mutex> &guard) const
 		    make_uniq<manifest_file::ManifestReader>(*shared_state->data_manifest_read_state->scan);
 
 		auto &executor = shared_state->data_manifest_read_state->executor;
-		auto &scheduler = TaskScheduler::GetScheduler(context);
-		auto worker_thread_count = scheduler.NumberOfThreads();
+		auto worker_thread_count = TaskScheduler::QueryThreads(context);
 
 		auto num_threads = MinValue<idx_t>(worker_thread_count, shared_state->committed_data_manifests.size());
 		shared_state->data_manifest_read_state->in_progress_tasks = num_threads;
