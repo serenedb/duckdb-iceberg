@@ -191,8 +191,19 @@ static bool VendedCredentialsExpired(const case_insensitive_map_t<string> &confi
 	return false;
 }
 
+string InternalCredentialSecretPrefix(transaction_t transaction_id) {
+	return "__internal_ic_" + to_string(transaction_id) + "__";
+}
+
+void NameInternalCredentialSecret(CreateSecretInput &input, const string &prefix, const string &slot,
+                                  const string &table_key) {
+	input.name = Identifier(prefix + slot + "__" + table_key + "__" + StringUtil::Join(input.scope, "__"));
+}
+
 IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientContext &context) {
 	IRCAPITableCredentials result;
+	auto transaction_id = MetaTransaction::Get(context).global_transaction_id;
+
 	case_insensitive_map_t<string> table_config;
 	vector<IcebergTableStorageCredential> table_storage_credentials;
 	{
@@ -211,9 +222,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		table_storage_credentials = storage_credentials;
 	}
 
-	auto schema_component = IRCPathComponent::NamespaceComponent(schema.namespace_items);
-	auto secret_base_name = StringUtil::Format("__internal_ic_%s__%s__%s", catalog.GetName().GetIdentifierName(),
-	                                           schema_component.encoded, name);
+	auto secret_base_name = InternalCredentialSecretPrefix(transaction_id);
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
@@ -280,7 +289,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 				create_secret_input.scope.push_back(table_location);
 			}
 		}
-		create_secret_input.name = Identifier(StringUtil::Format("%s__%d", secret_base_name, index));
+		NameInternalCredentialSecret(create_secret_input, secret_base_name, to_string(index), GetTableKey());
 
 		create_secret_input.type = Identifier(storage_type);
 		create_secret_input.provider = "config";
@@ -303,6 +312,7 @@ IRCAPITableCredentials IcebergTableInformation::GetVendedCredentials(ClientConte
 		config.name = Identifier(secret_base_name);
 		config.type = Identifier(storage_type);
 		config.provider = "config";
+		config.storage_type = "memory";
 	}
 
 	return result;

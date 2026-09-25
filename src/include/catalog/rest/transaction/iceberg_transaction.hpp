@@ -128,6 +128,7 @@ public:
 	//! Set of schemas that this transaction has listed tables for
 	case_insensitive_set_t listed_schemas;
 
+	string secret_prefix;
 	case_insensitive_set_t looked_up_entries;
 	mutex lock;
 

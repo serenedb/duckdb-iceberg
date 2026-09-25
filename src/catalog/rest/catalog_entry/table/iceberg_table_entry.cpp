@@ -47,6 +47,41 @@ void AddHTTPSecretsToOptions(SecretEntry &http_secret_entry, case_insensitive_ma
 	                            : http_kv_secret.TryGetValue("verify_ssl").DefaultCastAs(LogicalType::BOOLEAN);
 }
 
+static unique_ptr<BaseSecret> BuildVendedSecret(const CreateSecretInput &input) {
+	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
+	secret->redact_keys = {"secret", "session_token", "bearer_token", "http_proxy_password"};
+
+	if (input.type == "r2") {
+		auto account_id_entry = input.options.find("account_id");
+		if (account_id_entry != input.options.end()) {
+			if (input.options.find("endpoint") == input.options.end()) {
+				secret->secret_map["endpoint"] = account_id_entry->second.ToString() + ".r2.cloudflarestorage.com";
+			}
+			if (input.options.find("url_style") == input.options.end()) {
+				secret->secret_map["url_style"] = "path";
+			}
+		}
+	}
+
+	for (auto &option : input.options) {
+		auto key = StringUtil::Lower(option.first);
+		if (key == "account_id") {
+			continue;
+		}
+		secret->secret_map[Identifier(key)] = option.second;
+	}
+	return std::move(secret);
+}
+
+//! Registered through a committed transaction: an entry written that way is visible to readers that started before
+//! it, and to the transaction-end sweep that has to drop it again.
+static void RegisterInternalCredential(ClientContext &context, SecretManager &secret_manager,
+                                       const CreateSecretInput &info) {
+	auto transaction = CatalogTransaction::GetCommittedTransaction(*context.db);
+	secret_manager.RegisterSecret(transaction, BuildVendedSecret(info), OnCreateConflict::REPLACE_ON_CONFLICT,
+	                              SecretPersistType::TEMPORARY);
+}
+
 void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) const {
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &secret_manager = SecretManager::Get(context);
@@ -144,7 +179,10 @@ void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) cons
 			AddHTTPSecretsToOptions(*http_secret_entry, info.options);
 		}
 
-		(void)secret_manager.CreateSecret(context, info);
+		NameInternalCredentialSecret(
+		    info, InternalCredentialSecretPrefix(MetaTransaction::Get(context).global_transaction_id), "cfg",
+		    table_info.GetTableKey());
+		RegisterInternalCredential(context, secret_manager, info);
 		// if there is no key_id, secret, token (S3/GCS) or account_name, connection_string (Azure) in the info,
 		// log that vended credentials has not worked
 		bool has_s3_creds = info.options.find("key_id") != info.options.end() ||
@@ -162,7 +200,7 @@ void IcebergTableEntry::PrepareIcebergScanFromEntry(ClientContext &context) cons
 			if (http_secret_entry) {
 				AddHTTPSecretsToOptions(*http_secret_entry, info.options);
 			}
-			(void)secret_manager.CreateSecret(context, info);
+			RegisterInternalCredential(context, secret_manager, info);
 		}
 	}
 }
