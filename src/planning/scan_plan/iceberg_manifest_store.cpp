@@ -231,8 +231,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 		    make_uniq<IcebergManifestScanningState>(context.context, std::move(data_scan), committed_data_manifests);
 
 		auto &executor = data_manifest_read_state->executor;
-		auto &scheduler = TaskScheduler::GetScheduler(context.context);
-		auto num_threads = MinValue<idx_t>(scheduler.NumberOfThreads(), selected_committed_manifests.size());
+		auto num_threads =
+		    MinValue<idx_t>(TaskScheduler::QueryThreads(context.context), selected_committed_manifests.size());
 		data_manifest_read_state->in_progress_tasks = num_threads;
 		for (idx_t i = 0; i < num_threads; i++) {
 			executor.ScheduleTask(make_uniq<ManifestReadTask>(*data_manifest_read_state));
@@ -310,8 +310,8 @@ void IcebergManifestStore::ReadDeleteManifests(const vector<idx_t> &manifest_ind
 			    make_shared_ptr<IcebergManifestScanningState>(context.context, std::move(scan), new_load->manifests);
 
 			auto &executor = new_load->scan_state->executor;
-			auto &scheduler = TaskScheduler::GetScheduler(context.context);
-			auto num_threads = MinValue<idx_t>(scheduler.NumberOfThreads(), new_load->manifest_indexes.size());
+			auto num_threads =
+			    MinValue<idx_t>(TaskScheduler::QueryThreads(context.context), new_load->manifest_indexes.size());
 			new_load->scan_state->in_progress_tasks = num_threads;
 			for (idx_t i = 0; i < num_threads; i++) {
 				executor.ScheduleTask(make_uniq<ManifestReadTask>(*new_load->scan_state));
