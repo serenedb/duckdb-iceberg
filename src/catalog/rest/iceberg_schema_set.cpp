@@ -95,6 +95,7 @@ void IcebergSchemaSet::Scan(ClientContext &context, const std::function<void(Cat
 }
 
 void IcebergSchemaSet::AddEntry(const string &name, shared_ptr<IcebergSchemaEntry> entry) {
+	lock_guard<mutex> l(entry_lock);
 	entries.emplace(name, std::move(entry));
 }
 
@@ -104,6 +105,7 @@ void IcebergSchemaSet::RemoveEntry(const string &name) {
 }
 
 CatalogEntry &IcebergSchemaSet::GetEntry(const string &name) {
+	lock_guard<mutex> l(entry_lock);
 	auto entry_it = entries.find(name);
 	if (entry_it == entries.end()) {
 		throw CatalogException("Schema '%s' does not exist", name);
