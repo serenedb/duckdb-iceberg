@@ -483,9 +483,6 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
 	lock_guard<mutex> guard(schema.tables.GetEntryLock());
 	shared_ptr<IcebergTableInformation> old_version;
 	schema.tables.CreateEntryInternal(guard, new_name, std::move(rename_update.new_table), old_version);
-	if (old_version) {
-		throw TransactionException("Table %s was already created by a different transaction!", new_name);
-	}
 }
 
 void IcebergTransaction::DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update,
@@ -563,14 +560,13 @@ void IcebergTransaction::DoSingleTableCommitUpdates(IcebergTransactionAlterUpdat
 void IcebergTransaction::DoTableDeletes(IcebergTransactionDeleteUpdate &delete_update, ClientContext &context) {
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &table = delete_update.deleted_table;
-	auto schema_key = table.schema.name;
 	auto table_key = table.GetTableKey();
 	auto &table_name = table.name;
 	IRCAPI::CommitTableDelete(context, catalog, table.schema.namespace_items, table_name);
 	// remove the load table result
 	ic_catalog.table_request_cache.Expire(context, table_key);
 	// remove the table entry from the catalog
-	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key.GetIdentifierName()).Cast<IcebergSchemaEntry>();
+	auto &schema_entry = table.schema;
 	DropInfo drop_info;
 	drop_info.SetName(Identifier(table_name));
 	drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
