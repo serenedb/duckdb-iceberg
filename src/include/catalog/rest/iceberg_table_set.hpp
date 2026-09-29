@@ -2,6 +2,9 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/common/unordered_set.hpp"
+
+#include <absl/synchronization/mutex.h>
 
 #include "catalog/rest/catalog_entry/table/iceberg_table_entry.hpp"
 #include "catalog/rest/catalog_entry/table/iceberg_table_information.hpp"
@@ -39,8 +42,14 @@ public:
 	Catalog &catalog;
 
 private:
+	void ClaimFetch(const string &table_key);
+	void ReleaseFetch(const string &table_key);
+
+private:
 	case_insensitive_map_t<shared_ptr<IcebergTableInformation>> entries;
 	mutex entry_lock;
+	absl::Mutex fetch_lock;
+	unordered_set<string> fetching;
 };
 
 } // namespace duckdb
