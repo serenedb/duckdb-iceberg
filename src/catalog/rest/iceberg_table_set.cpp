@@ -272,9 +272,6 @@ void IcebergTableSet::RenameEntry(const string &name, const string &new_name, Ic
 	entries.erase(source);
 	shared_ptr<IcebergTable> old_version;
 	CreateEntryInternal(new_name, std::move(new_table), old_version);
-	if (old_version) {
-		throw TransactionException("Table %s was already created by a different transaction!", new_name);
-	}
 }
 
 void IcebergTableSet::LoadEntriesInternal(ClientContext &context) {
