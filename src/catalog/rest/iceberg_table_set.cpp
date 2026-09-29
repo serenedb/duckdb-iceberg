@@ -302,40 +302,65 @@ IcebergTableInformation &IcebergTableSet::CreateNewEntry(ClientContext &context,
 	return table_info;
 }
 
+void IcebergTableSet::ClaimFetch(const string &table_key) {
+	absl::MutexLock guard(&fetch_lock);
+	const auto idle = [&]() {
+		return fetching.find(table_key) == fetching.end();
+	};
+	fetch_lock.Await(absl::Condition(&idle));
+	fetching.insert(table_key);
+}
+
+void IcebergTableSet::ReleaseFetch(const string &table_key) {
+	absl::MutexLock guard(&fetch_lock);
+	fetching.erase(table_key);
+}
+
 optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, const EntryLookupInfo &lookup) {
-	lock_guard<mutex> l(entry_lock);
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
 	const auto &table_name = lookup.GetEntryName();
-	// first check transaction entries
 	const auto table_key = IcebergTableInformation::GetTableKey(schema.namespace_items, table_name);
-	auto latest_state = iceberg_transaction.GetLatestTableState(table_key);
-
 	auto at = lookup.GetAtClause();
-	if (latest_state) {
+
+	auto transaction_entry = [&]() -> optional_ptr<CatalogEntry> {
+		auto latest_state = iceberg_transaction.GetLatestTableState(table_key);
 		if (!latest_state->IsAlive()) {
 			// If table has been deleted or is missing within the transaction, return null
 			return nullptr;
 		}
-		auto &table_info = latest_state->GetInfo();
-		return table_info.GetSchemaVersion(context, at);
+		return latest_state->GetInfo().GetSchemaVersion(context, at);
+	};
+	// first check transaction entries
+	{
+		lock_guard<mutex> l(entry_lock);
+		if (iceberg_transaction.GetLatestTableState(table_key)) {
+			return transaction_entry();
+		}
 	}
 
-	//! Preserve the old version in case our replacement fails
-	shared_ptr<IcebergTableInformation> old_version;
-	auto new_version =
-	    CreateEntryInternal(l, table_name, IcebergTableInformation(ic_catalog, schema, table_name), old_version);
-	auto &table_info = *new_version;
-	if (!FillEntry(context, table_info)) {
-		if (old_version) {
-			entries[table_name] = std::move(old_version);
-		} else {
-			entries.erase(table_name);
-		}
+	auto new_version = make_shared_ptr<IcebergTableInformation>(ic_catalog, schema, table_name);
+	bool found;
+	ClaimFetch(table_key);
+	try {
+		found = FillEntry(context, *new_version);
+	} catch (...) {
+		ReleaseFetch(table_key);
+		throw;
+	}
+	ReleaseFetch(table_key);
+
+	lock_guard<mutex> l(entry_lock);
+	if (iceberg_transaction.GetLatestTableState(table_key)) {
+		return transaction_entry();
+	}
+	if (!found) {
 		//! The table doesn't exist in the catalog
 		iceberg_transaction.SetLatestTableState(table_key, IcebergTableStatus::MISSING);
 		return nullptr;
 	}
+	entries[table_name] = new_version;
+	auto &table_info = *new_version;
 
 	iceberg_transaction.ReferenceTable(new_version);
 	auto ret = table_info.GetSchemaVersion(context, at);
