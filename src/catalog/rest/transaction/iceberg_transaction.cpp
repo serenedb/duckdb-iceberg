@@ -483,9 +483,6 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
 	lock_guard<mutex> guard(schema.tables.GetEntryLock());
 	shared_ptr<IcebergTableInformation> old_version;
 	schema.tables.CreateEntryInternal(guard, new_name, std::move(rename_update.new_table), old_version);
-	if (old_version) {
-		throw TransactionException("Table %s was already created by a different transaction!", new_name);
-	}
 }
 
 void IcebergTransaction::DoMultiTableCommitUpdates(IcebergTransactionAlterUpdate &alter_update,
