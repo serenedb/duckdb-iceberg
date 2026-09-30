@@ -24,6 +24,8 @@
 #include "core/metadata/partition/iceberg_partition_spec.hpp"
 #include "catalog/rest/transaction/iceberg_transaction_update.hpp"
 
+#include <absl/cleanup/cleanup.h>
+
 namespace duckdb {
 
 IcebergTableSet::IcebergTableSet(IcebergSchemaEntry &schema) : schema(schema), catalog(schema.ParentCatalog()) {
@@ -303,11 +305,10 @@ IcebergTableInformation &IcebergTableSet::CreateNewEntry(ClientContext &context,
 }
 
 void IcebergTableSet::ClaimFetch(const string &table_key) {
-	absl::MutexLock guard(&fetch_lock);
 	const auto idle = [&]() {
 		return fetching.find(table_key) == fetching.end();
 	};
-	fetch_lock.Await(absl::Condition(&idle));
+	absl::MutexLock guard(&fetch_lock, absl::Condition(&idle));
 	fetching.insert(table_key);
 }
 
@@ -340,15 +341,12 @@ optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, con
 	}
 
 	auto new_version = make_shared_ptr<IcebergTableInformation>(ic_catalog, schema, table_name);
-	bool found;
 	ClaimFetch(table_key);
-	try {
-		found = FillEntry(context, *new_version);
-	} catch (...) {
+	absl::Cleanup release_fetch = [&]() noexcept {
 		ReleaseFetch(table_key);
-		throw;
-	}
-	ReleaseFetch(table_key);
+	};
+	const bool found = FillEntry(context, *new_version);
+	std::move(release_fetch).Invoke();
 
 	lock_guard<mutex> l(entry_lock);
 	if (iceberg_transaction.GetLatestTableState(table_key)) {
