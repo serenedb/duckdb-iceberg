@@ -144,7 +144,8 @@ static void IcebergScanTasksFunction(ClientContext &context, TableFunctionInput 
 }
 
 TableFunctionSet IcebergFunctions::GetIcebergScanTasksFunction() {
-	TableFunction function("iceberg_scan_tasks", {LogicalType::ANY}, IcebergScanTasksFunction, IcebergScanTasksBind);
+	TableFunction function("iceberg_scan_tasks", FunctionSignature().AddPositionalOnly("input", LogicalType::ANY),
+	                       IcebergScanTasksFunction, IcebergScanTasksBind);
 	function.init_global = [](ClientContext &, TableFunctionInitInput &input) -> unique_ptr<GlobalTableFunctionState> {
 		return make_uniq<IcebergScanTasksGlobalState>(input.column_indexes);
 	};
