@@ -208,6 +208,16 @@ ScalarFunctionSet IcebergFunctions::GetIcebergBucketFunction() {
 //   binary:    first L bytes
 //===--------------------------------------------------------------------===//
 
+// Bind only rejects a non-positive width when the expression folds to a
+// constant; a width read from a column reaches the modulo below, where 0 is a
+// SIGFPE rather than an error.
+static int64_t IcebergTruncateWidth(int32_t W) {
+	if (W <= 0) [[unlikely]] {
+		throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d", W);
+	}
+	return W;
+}
+
 static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &context = input.GetClientContext();
@@ -227,18 +237,26 @@ static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &inp
 static void IcebergTruncateInteger(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t W, int32_t v) -> int32_t { return v - (((v % W) + W) % W); });
+	    [](int32_t W, int32_t v) -> int32_t {
+		    const int64_t w = IcebergTruncateWidth(W);
+		    const int64_t val = v;
+		    return static_cast<int32_t>(val - (((val % w) + w) % w));
+	    });
 }
 
 static void IcebergTruncateBigInt(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int64_t, int64_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t W, int64_t v) -> int64_t { return v - (((v % W) + W) % W); });
+	    [](int32_t W, int64_t v) -> int64_t {
+		    const int64_t w = IcebergTruncateWidth(W);
+		    return v - (((v % w) + w) % w);
+	    });
 }
 
 static void IcebergTruncateVarchar(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&result](int32_t L, string_t val) -> string_t {
+		    IcebergTruncateWidth(L);
 		    auto data = val.GetData();
 		    auto size = val.GetSize();
 		    size_t num_chars = 0;
@@ -255,6 +273,7 @@ static void IcebergTruncateVarchar(DataChunk &input, ExpressionState &state, Vec
 static void IcebergTruncateBlob(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&result](int32_t L, string_t val) -> string_t {
+		    IcebergTruncateWidth(L);
 		    auto size = val.GetSize();
 		    auto truncated = static_cast<idx_t>(L) < size ? static_cast<idx_t>(L) : size;
 		    return StringVector::AddStringOrBlob(result, val.GetData(), truncated);
@@ -265,7 +284,7 @@ static void IcebergTruncateDecimalInt16(DataChunk &input, ExpressionState &state
 	BinaryExecutor::Execute<int32_t, int16_t, int16_t>(input.data[0], input.data[1], result, input.size(),
 	                                                   [](int32_t W, int16_t v) -> int16_t {
 		                                                   int64_t val = static_cast<int64_t>(v);
-		                                                   int64_t w = static_cast<int64_t>(W);
+		                                                   int64_t w = IcebergTruncateWidth(W);
 		                                                   return static_cast<int16_t>(val - (((val % w) + w) % w));
 	                                                   });
 }
@@ -274,7 +293,7 @@ static void IcebergTruncateDecimalInt32(DataChunk &input, ExpressionState &state
 	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(input.data[0], input.data[1], result, input.size(),
 	                                                   [](int32_t W, int32_t v) -> int32_t {
 		                                                   int64_t val = static_cast<int64_t>(v);
-		                                                   int64_t w = static_cast<int64_t>(W);
+		                                                   int64_t w = IcebergTruncateWidth(W);
 		                                                   return static_cast<int32_t>(val - (((val % w) + w) % w));
 	                                                   });
 }
@@ -282,7 +301,7 @@ static void IcebergTruncateDecimalInt32(DataChunk &input, ExpressionState &state
 static void IcebergTruncateDecimalInt64(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int64_t, int64_t>(input.data[0], input.data[1], result, input.size(),
 	                                                   [](int32_t W, int64_t v) -> int64_t {
-		                                                   int64_t w = static_cast<int64_t>(W);
+		                                                   int64_t w = IcebergTruncateWidth(W);
 		                                                   return v - (((v % w) + w) % w);
 	                                                   });
 }
@@ -290,7 +309,7 @@ static void IcebergTruncateDecimalInt64(DataChunk &input, ExpressionState &state
 static void IcebergTruncateDecimalHugeInt(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, hugeint_t, hugeint_t>(input.data[0], input.data[1], result, input.size(),
 	                                                       [](int32_t W, hugeint_t v) -> hugeint_t {
-		                                                       hugeint_t w = hugeint_t(W);
+		                                                       hugeint_t w = hugeint_t(IcebergTruncateWidth(W));
 		                                                       return v - (((v % w) + w) % w);
 	                                                       });
 }

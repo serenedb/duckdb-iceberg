@@ -187,23 +187,102 @@ FROM range(0, 100);
 true
 
 # ---- Width = 0 is invalid (Iceberg spec requires positive width) ----
+# A constant width is rejected while binding.
 
 statement error
 SELECT iceberg_truncate(0, 1::INTEGER);
 ----
-<REGEX>:.*width must be a positive integer.*
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
 
 statement error
 SELECT iceberg_truncate(0, 1::BIGINT);
 ----
-<REGEX>:.*width must be a positive integer.*
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
 
 statement error
 SELECT iceberg_truncate(0, 'iceberg');
 ----
-<REGEX>:.*width must be a positive integer.*
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
 
 statement error
 SELECT iceberg_truncate(0, '\x01\x02'::BLOB);
 ----
-<REGEX>:.*width must be a positive integer.*
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(-3, 1::INTEGER);
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got -3.*
+
+# ---- Width that is not foldable skips the bind check and must be rejected
+# ---- at execution rather than dividing by zero.
+
+statement ok
+CREATE TABLE truncate_widths(w INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO truncate_widths VALUES (0, 42), (-3, 42), (4, 42);
+
+statement error
+SELECT iceberg_truncate(w, v) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, v) FROM truncate_widths WHERE w < 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got -3.*
+
+statement error
+SELECT iceberg_truncate(w, v::BIGINT) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, v::DECIMAL(4,1)) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, v::DECIMAL(9,2)) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, v::DECIMAL(18,2)) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, v::DECIMAL(38,2)) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, 'iceberg') FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+statement error
+SELECT iceberg_truncate(w, '\x01\x02'::BLOB) FROM truncate_widths WHERE w = 0;
+----
+<REGEX>:.*iceberg_truncate: width must be a positive integer, got 0.*
+
+# A positive runtime width still works, and the check costs it nothing.
+
+query I
+SELECT iceberg_truncate(w, v) FROM truncate_widths WHERE w > 0;
+----
+40
+
+# Large widths: the intermediate (v % W) + W must not overflow int32.
+
+query I
+SELECT iceberg_truncate(1500000000, 1000000000::INTEGER);
+----
+0
+
+query I
+SELECT iceberg_truncate(2000000000, -1::INTEGER);
+----
+-2000000000
