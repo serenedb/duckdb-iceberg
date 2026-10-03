@@ -87,6 +87,7 @@ public:
 
 	//! Evict only if the table was initialized from the result that is still cached for its key.
 	void EvictIfCurrent(const IcebergTable &table);
+	void Evict(const string &table_key);
 
 private:
 	friend class LoadTableCachePublication;
