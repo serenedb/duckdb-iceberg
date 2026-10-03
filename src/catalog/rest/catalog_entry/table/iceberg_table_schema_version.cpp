@@ -123,6 +123,7 @@ virtual_column_map_t IcebergTableSchemaVersion::GetVirtualColumns() const {
 virtual_column_map_t IcebergTableSchemaVersion::VirtualColumns(int32_t iceberg_version) {
 	virtual_column_map_t result;
 	result.emplace(MultiFileReader::COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR));
+	result.emplace(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX, TableColumn("file_index", LogicalType::UBIGINT));
 	result.emplace(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
 	               TableColumn("file_row_number", LogicalType::BIGINT));
 	//! Row lineage columns only exist for format version >= 3
