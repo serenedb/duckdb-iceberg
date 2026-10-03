@@ -95,6 +95,12 @@ void LoadTableResultCache::Store(const string &table_key, unique_ptr<const rest_
 	tables.emplace(table_key, MetadataCacheValue(expire_timestamp_ms, std::move(result)));
 }
 
+void LoadTableResultCache::Evict(const string &table_key) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	InvalidateLoads(table_key);
+	tables.erase(table_key);
+}
+
 void LoadTableResultCache::EvictIfCurrent(const IcebergTable &table) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	// Even without a matching cached payload, a pre-write fetch must not repopulate the cache.
