@@ -9,8 +9,6 @@
 #include "planning/metadata_io/manifest/iceberg_manifest_reader.hpp"
 #include "planning/metadata_io/manifest_list/iceberg_manifest_list_reader.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 struct IcebergManifestScanningState {
@@ -28,7 +26,6 @@ struct IcebergManifestScanningState {
 
 struct IcebergDeleteManifestLoadState {
 	mutex lock;
-	std::condition_variable cv;
 	bool complete = false;
 	ErrorData error;
 	vector<idx_t> manifest_indexes;
@@ -347,12 +344,14 @@ void IcebergManifestStore::ReadDeleteManifests(const vector<idx_t> &manifest_ind
 			new_load->error = std::move(load_error);
 			new_load->complete = true;
 		}
-		new_load->cv.notify_all();
 	}
 
 	for (auto &load : required_loads) {
 		unique_lock<mutex> guard(load->lock);
-		load->cv.wait(guard, [&load] { return load->complete; });
+		auto complete = [&load]() {
+			return load->complete;
+		};
+		load->lock.Await(absl::Condition(&complete));
 		if (load->error.HasError()) {
 			load->error.Throw();
 		}

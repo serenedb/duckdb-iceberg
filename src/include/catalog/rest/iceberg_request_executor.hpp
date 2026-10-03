@@ -51,8 +51,10 @@ public:
 				D_ASSERT(task_result != TaskExecutionResult::TASK_NOT_FINISHED);
 			} else {
 				unique_lock<mutex> guard(result.lock);
-				// Interruption does not notify this condition variable, so periodically check it on the caller.
-				result.completion.wait_for(guard, std::chrono::milliseconds(50), [&]() { return result.ready; });
+				auto ready = [&]() {
+					return result.ready;
+				};
+				result.lock.AwaitWithTimeout(absl::Condition(&ready), absl::Milliseconds(50));
 			}
 		}
 	}

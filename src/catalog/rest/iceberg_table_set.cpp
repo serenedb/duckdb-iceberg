@@ -311,7 +311,7 @@ void IcebergTableSet::ApplyListResult(IcebergListTablesResult tables) {
 		// Tables created in this transaction live on the transaction, not here, so they are safe.
 		for (auto it = entries.begin(); it != entries.end();) {
 			if (listed.find(it->first) == listed.end()) {
-				it = entries.erase(it);
+				entries.erase(it++);
 			} else {
 				++it;
 			}
