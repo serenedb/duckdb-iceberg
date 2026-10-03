@@ -17,8 +17,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 //! Stable Iceberg identity and physical probe type; reader-local column positions are deliberately excluded.
@@ -118,7 +116,6 @@ private:
 	//! One builder publishes each layout key; waiters share its result while unrelated layouts build concurrently.
 	struct LayoutLoadState {
 		mutex lock;
-		std::condition_variable cv;
 		bool complete = false;
 		ErrorData error;
 		string error_context;

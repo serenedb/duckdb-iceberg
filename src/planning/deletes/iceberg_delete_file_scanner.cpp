@@ -404,7 +404,6 @@ static void CompleteDeleteFileLoads(const vector<shared_ptr<IcebergDeleteFileLoa
 			load->error = error;
 			load->complete = true;
 		}
-		load->cv.notify_all();
 	}
 }
 
@@ -468,7 +467,10 @@ IcebergDeletePlan IcebergDeleteExecutionState::ProcessDeletes(const IcebergDelet
 	vector<shared_ptr<IcebergDeleteData>> positions;
 	for (auto &load : required_loads) {
 		unique_lock<mutex> guard(load->lock);
-		load->cv.wait(guard, [&load] { return load->complete; });
+		auto complete = [&load]() {
+			return load->complete;
+		};
+		load->lock.Await(absl::Condition(&complete));
 		if (load->error.HasError()) {
 			load->error.Throw();
 		}

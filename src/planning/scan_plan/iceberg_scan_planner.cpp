@@ -252,9 +252,9 @@ void IcebergScanPlanner::EnsureScanOrderApplied(annotated_lock_guard<annotated_m
 		for (idx_t i = 0; i < data_manifest_entries.size(); i++) {
 			order.push_back(i);
 		}
-		std::sort(order.begin(), order.end(), [&](idx_t lhs, idx_t rhs) {
-			return data_manifest_entries[lhs].entry.data_file.file_path <
-			       data_manifest_entries[rhs].entry.data_file.file_path;
+		auto &entries = data_manifest_entries;
+		std::sort(order.begin(), order.end(), [&entries](idx_t lhs, idx_t rhs) {
+			return entries[lhs].entry.data_file.file_path < entries[rhs].entry.data_file.file_path;
 		});
 		vector<BoundIcebergManifestEntry> sorted;
 		sorted.reserve(order.size());
