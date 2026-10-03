@@ -388,7 +388,8 @@ IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry
 			throw InternalException("Delete manifest index %llu is out of bounds for %llu manifests",
 			                        delete_file.manifest_idx, delete_manifests.size());
 		}
-		auto &entries = delete_manifests[delete_file.manifest_idx].entry.GetManifestEntries();
+		auto &delete_manifest = delete_manifests[delete_file.manifest_idx].entry;
+		auto &entries = delete_manifest.GetManifestEntries();
 		if (delete_file.entry_idx >= entries.size()) {
 			throw InternalException("Delete manifest entry index %llu is out of bounds for manifest %llu",
 			                        delete_file.entry_idx, delete_file.manifest_idx);
@@ -397,7 +398,8 @@ IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry
 		if (IcebergDeletePlanner::DeleteEntryMatchesFilters(delete_context, delete_file.manifest_idx, delete_entry) &&
 		    IcebergDeletePlanner::DeleteEntryAppliesToDataFile(delete_context, delete_file.manifest_idx, delete_entry,
 		                                                       data_manifest_entry, partition_values)) {
-			result.emplace_back(delete_entry.data_file);
+			auto &applicable = result.emplace_back(delete_entry.data_file);
+			applicable.sequence_number = delete_entry.GetSequenceNumber(delete_manifest.file);
 		}
 	}
 	return result;
