@@ -7,8 +7,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 class IcebergCatalog;
@@ -49,7 +47,6 @@ private:
 		D_ASSERT(!ready);
 		result.emplace(std::move(value));
 		ready = true;
-		completion.notify_all();
 	}
 
 	void SetError(ErrorData value) {
@@ -57,11 +54,9 @@ private:
 		D_ASSERT(!ready);
 		error = std::move(value);
 		ready = true;
-		completion.notify_all();
 	}
 
 	mutable mutex lock;
-	std::condition_variable completion;
 	bool ready = false;
 	//! An engaged outer optional can contain an empty RESULT optional (a successfully refused listing).
 	optional<RESULT> result;

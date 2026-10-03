@@ -4,8 +4,6 @@
 #include "core/deletes/iceberg_equality_delete.hpp"
 #include "core/deletes/iceberg_delete_file.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 using position_delete_map_t = unordered_map<string, shared_ptr<IcebergDeleteData>>;
@@ -30,7 +28,6 @@ struct IcebergDeleteExecutionContext {
 //! planning: it caches the result of reading the selected delete descriptor.
 struct IcebergDeleteFileLoadState {
 	mutex lock;
-	std::condition_variable cv;
 	bool complete = false;
 	ErrorData error;
 	shared_ptr<IcebergEqualityDeleteFile> equality_delete;
