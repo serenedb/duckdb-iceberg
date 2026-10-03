@@ -87,7 +87,8 @@ BindInfo IcebergBindInfo(const optional_ptr<FunctionData> bind_data) {
 	return result;
 }
 
-static void IcebergSetScanOrder(unique_ptr<RowGroupOrderOptions> order_options, optional_ptr<FunctionData> bind_data) {
+static void IcebergSetScanOrder(ClientContext &context, unique_ptr<RowGroupOrderOptions> order_options,
+                                optional_ptr<FunctionData> bind_data) {
 	auto &multi_file_data = bind_data->Cast<MultiFileBindData>();
 	auto &file_list = multi_file_data.file_list->Cast<IcebergMultiFileList>();
 	file_list.GetScanPlanner().SetScanOrder(std::move(order_options));
