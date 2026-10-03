@@ -31,6 +31,7 @@ struct IcebergDeleteFile {
 	optional<string> referenced_data_file;
 	optional<int64_t> content_offset;
 	optional<int64_t> content_size_in_bytes;
+	optional<sequence_number_t> sequence_number;
 };
 
 } // namespace duckdb
