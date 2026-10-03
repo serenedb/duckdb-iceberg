@@ -14,7 +14,6 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 #include "catalog/rest/api/catalog_api.hpp"
 #include "catalog/rest/transaction/iceberg_transaction.hpp"
@@ -190,7 +189,8 @@ IcebergTable::GetVendedCredentials(ClientContext &context,
                                    const vector<rest_api_objects::StorageCredential> &storage_credentials) const {
 	IRCAPITableCredentials result;
 	auto schema_component = IRCPathComponent::NamespaceComponent(schema.namespace_items, catalog.namespace_separator);
-	auto secret_base_name = UUID::ToString(UUID::GenerateRandomUUID());
+	auto secret_base_name = StringUtil::Format("__internal_ic_%s__%s__%s", catalog.GetName().GetIdentifierName(),
+	                                           schema_component.encoded, name);
 	case_insensitive_map_t<Value> user_defaults;
 	if (catalog.auth_handler->type == IcebergAuthorizationType::SIGV4) {
 		auto &sigv4_auth = catalog.auth_handler->Cast<SIGV4Authorization>();
