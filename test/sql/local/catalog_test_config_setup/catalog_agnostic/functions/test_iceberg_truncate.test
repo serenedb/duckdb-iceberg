@@ -217,3 +217,18 @@ statement error
 SELECT iceberg_truncate(0, '\x01\x02'::BLOB);
 ----
 <REGEX>:.*width must be a positive integer.*
+
+query I
+SELECT TRY(iceberg_truncate(('x' || '')::INTEGER, 1000));
+----
+NULL
+
+query I
+SELECT TRY(iceberg_truncate(('x' || '')::INTEGER, 1.5::DECIMAL(4, 1)));
+----
+NULL
+
+statement error
+SELECT iceberg_truncate(('x' || '')::INTEGER, 1000);
+----
+<REGEX>:.*Could not convert string 'x' to INT32.*

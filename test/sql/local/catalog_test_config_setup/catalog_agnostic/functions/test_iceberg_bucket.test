@@ -323,3 +323,18 @@ statement error
 SELECT iceberg_bucket(n, 'iceberg') FROM (VALUES (-3)) t(n);
 ----
 <REGEX>:.*modulo must be a positive integer.*
+
+query I
+SELECT TRY(iceberg_bucket(('x' || '')::INTEGER, 1000));
+----
+NULL
+
+query I
+SELECT TRY(iceberg_bucket(('x' || '')::INTEGER, 1.5::DECIMAL(4, 1)));
+----
+NULL
+
+statement error
+SELECT iceberg_bucket(('x' || '')::INTEGER, 1000);
+----
+<REGEX>:.*Could not convert string 'x' to INT32.*
