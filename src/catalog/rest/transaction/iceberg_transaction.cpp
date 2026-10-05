@@ -877,6 +877,12 @@ void IcebergTransaction::DoViewDeletes(ClientContext &context) {
 	deleted_views.clear();
 }
 
+void IcebergTransaction::ReferenceTable(shared_ptr<IcebergTable> table) {
+	lock_guard<mutex> guard(lock);
+	auto &ref = *table;
+	tables.emplace(ref, std::move(table));
+}
+
 void IcebergTransaction::InvalidateViewEntry(const string &view_key) {
 	auto entry = views.find(view_key);
 	if (entry != views.end()) {
