@@ -129,10 +129,7 @@ void IcebergTableSet::ScanEagerEntries(ClientContext &context, const std::functi
 	auto schedule_next = [&]() {
 		context.InterruptCheck();
 		auto &table = *entry->second;
-		{
-			lock_guard<mutex> guard(transaction.lock);
-			transaction.tables[table.GetTableKey()] = entry->second;
-		}
+		transaction.ReferenceTable(entry->second);
 		++entry;
 		auto load = make_uniq<PendingTableLoad>(table);
 		bool needs_load = false;
@@ -222,10 +219,7 @@ void IcebergTableSet::Scan(ClientContext &context, const std::function<void(Cata
 	auto &transaction = IcebergTransaction::Get(context, catalog);
 	for (auto &entry : entries) {
 		auto &table = *entry.second;
-		{
-			lock_guard<mutex> guard(transaction.lock);
-			transaction.tables[table.GetTableKey()] = entry.second;
-		}
+		transaction.ReferenceTable(entry.second);
 		callback(GetScanEntry(table));
 	}
 }
@@ -517,10 +511,7 @@ optional_ptr<CatalogEntry> IcebergTableSet::GetEntry(ClientContext &context, con
 		annotated_lock_guard<annotated_mutex> l(entry_lock);
 		entries[table_name] = new_version;
 	}
-	{
-		lock_guard<mutex> guard(iceberg_transaction.lock);
-		iceberg_transaction.tables[table_key] = new_version;
-	}
+	iceberg_transaction.ReferenceTable(new_version);
 	auto &state = iceberg_transaction.SetCatalogTableState(new_version);
 	if (iceberg_transaction.StartedBefore(table_info.table_metadata.last_updated_ms)) {
 		state.GetOrCreateTransactionInfo(iceberg_transaction);
