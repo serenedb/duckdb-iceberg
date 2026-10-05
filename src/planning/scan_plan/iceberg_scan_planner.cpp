@@ -197,14 +197,13 @@ IcebergScanPlanner::GetDataFile(idx_t file_id, annotated_lock_guard<annotated_mu
 		}
 		auto &batch = data_view_cursor.current_batch;
 		auto &bound_manifest = data_manifests[batch.manifest_list_entry_idx];
-		auto &manifest_entries = bound_manifest.entry.GetManifestEntries();
 		auto &manifest_file = bound_manifest.entry.file;
 		if (!data_manifest_matches[batch.manifest_list_entry_idx]) {
 			data_view_cursor.current_batch_offset = batch.end_index;
 		}
 		for (; data_view_cursor.current_batch_offset < batch.end_index && file_id >= data_manifest_entries.size();
 		     data_view_cursor.current_batch_offset++) {
-			auto &manifest_entry = manifest_entries[data_view_cursor.current_batch_offset];
+			auto &manifest_entry = batch.entries[data_view_cursor.current_batch_offset];
 			auto &data_file = manifest_entry.data_file;
 			auto entry_path = data_file.file_path;
 			if (GetOptions().allow_moved_paths) {
