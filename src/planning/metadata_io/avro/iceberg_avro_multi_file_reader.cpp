@@ -688,7 +688,8 @@ void IcebergAvroMultiFileReader::FinalizeChunk(ClientContext &context, const Mul
 		}
 		if (manifest_scan_info.read_state) {
 			auto &read_state = *manifest_scan_info.read_state;
-			read_state.PushBatch(ManifestReadBatch(manifest_file_idx, start_index, manifest_entries.size()));
+			read_state.PushBatch(
+			    ManifestReadBatch(manifest_file_idx, start_index, manifest_entries.size(), manifest_entries.data()));
 		}
 		break;
 	}
