@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "core/metadata/manifest/iceberg_manifest.hpp"
 
 namespace duckdb {
 
@@ -11,14 +12,17 @@ struct ManifestReadBatch {
 public:
 	ManifestReadBatch() {
 	}
-	ManifestReadBatch(idx_t manifest_list_entry_idx, idx_t start_index, idx_t end_index)
-	    : manifest_list_entry_idx(manifest_list_entry_idx), start_index(start_index), end_index(end_index) {
+	ManifestReadBatch(idx_t manifest_list_entry_idx, idx_t start_index, idx_t end_index,
+	                  const IcebergManifestEntry *entries)
+	    : manifest_list_entry_idx(manifest_list_entry_idx), start_index(start_index), end_index(end_index),
+	      entries(entries) {
 	}
 
 public:
 	idx_t manifest_list_entry_idx;
 	idx_t start_index;
 	idx_t end_index;
+	const IcebergManifestEntry *entries = nullptr;
 };
 
 struct IcebergDataViewCursor {

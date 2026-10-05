@@ -17,7 +17,8 @@ void ServerSideScanPlanProvider::StartDataManifestScan(const vector<bool> &match
 	}
 	data_manifest_scan_started = true;
 	for (idx_t i = 0; i < plan.data_manifests.size(); i++) {
-		read_state.PushBatch(ManifestReadBatch {i, 0, plan.data_manifests[i].GetManifestEntries().size()});
+		auto &entries = plan.data_manifests[i].GetManifestEntries();
+		read_state.PushBatch(ManifestReadBatch {i, 0, entries.size(), entries.data()});
 	}
 }
 

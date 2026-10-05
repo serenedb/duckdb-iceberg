@@ -204,8 +204,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 			continue;
 		}
 		if (eagerly_loaded_data_manifests[manifest_idx]) {
-			auto &manifest = committed_data_manifests[manifest_idx];
-			read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, manifest.GetManifestEntries().size()});
+			auto &entries = committed_data_manifests[manifest_idx].GetManifestEntries();
+			read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
 		} else {
 			selected_committed_manifests.push_back(manifest_idx);
 		}
@@ -216,8 +216,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 		if (!matching_manifests[manifest_idx]) {
 			continue;
 		}
-		auto &manifest = transaction_data_manifests[transaction_idx].get();
-		read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, manifest.GetManifestEntries().size()});
+		auto &entries = transaction_data_manifests[transaction_idx].get().GetManifestEntries();
+		read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
 	}
 
 	if (!selected_committed_manifests.empty()) {
