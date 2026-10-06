@@ -255,10 +255,7 @@ DeserializeResult IcebergValue::DeserializeValue(const string_t &blob, const Log
 		// Previous versions of DuckDB-Iceberg truncated string metrics to N bytes,
 		// which could split a multi-byte character and produce invalid UTF-8.
 		// Repair the bound from its longest valid UTF-8 prefix.
-		idx_t len = size;
-		while (len > 0 && !Utf8Proc::IsValid(data, len)) {
-			len--;
-		}
+		const idx_t len = Utf8Proc::ValidPrefixLength(data, size);
 		if (len == 0) {
 			return DeserializeError(blob, type);
 		}
