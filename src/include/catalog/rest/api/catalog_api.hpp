@@ -42,7 +42,10 @@ public:
 	optional<rest_api_objects::IcebergErrorResponse> error_;
 };
 
-using IcebergLoadTableResult = APIResult<unique_ptr<const rest_api_objects::LoadTableResult>>;
+class IcebergLoadTableResult : public APIResult<unique_ptr<const rest_api_objects::LoadTableResult>> {
+public:
+	string etag_;
+};
 using IcebergLoadViewResult = APIResult<unique_ptr<const rest_api_objects::LoadViewResult>>;
 
 //! Owns the request inputs; execution only fetches and parses view metadata.
@@ -65,12 +68,13 @@ class IcebergLoadTableRequest {
 public:
 	using Result = IcebergLoadTableResult;
 
-	IcebergLoadTableRequest(vector<string> namespace_items, string table_name);
+	IcebergLoadTableRequest(vector<string> namespace_items, string table_name, string if_none_match = string());
 	IcebergLoadTableResult Execute(ClientContext &context, IcebergCatalog &catalog) const;
 
 private:
 	vector<string> namespace_items;
 	string table_name;
+	string if_none_match;
 };
 
 //! A refused table listing is distinct from a successful, empty listing.
@@ -152,7 +156,8 @@ public:
 	                                 const string &table);
 	static vector<string> ParseSchemaName(const string &namespace_name);
 	static IcebergLoadTableResult GetTable(ClientContext &context, IcebergCatalog &catalog,
-	                                       const IcebergSchemaEntry &schema, const string &table_name);
+	                                       const IcebergSchemaEntry &schema, const string &table_name,
+	                                       const string &if_none_match = string());
 	static APIResult<unique_ptr<const rest_api_objects::LoadCredentialsResponse>>
 	GetTableCredentials(ClientContext &context, IcebergCatalog &catalog, const IcebergSchemaEntry &schema,
 	                    const string &table_name);
