@@ -3,7 +3,9 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -163,7 +165,30 @@ IcebergMultiFileReader::InitializeGlobalState(ClientContext &context, const Mult
                                               const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
                                               const vector<MultiFileColumnDefinition> &global_columns,
                                               const vector<ColumnIndex> &global_column_ids) {
+	vector<bool> read_in_full(global_columns.size(), false);
+	for (auto &column_id : global_column_ids) {
+		if (!column_id.IsVirtualColumn() && !column_id.HasChildren() &&
+		    column_id.GetPrimaryIndex() < read_in_full.size()) {
+			read_in_full[column_id.GetPrimaryIndex()] = true;
+		}
+	}
+	reads_all_columns = std::all_of(read_in_full.begin(), read_in_full.end(), [](bool read) { return read; });
 	return make_uniq<IcebergMultiFileReaderGlobalState>(file_list);
+}
+
+shared_ptr<BaseFileReader> IcebergMultiFileReader::CreateReader(ClientContext &context,
+                                                                GlobalTableFunctionState &gstate,
+                                                                const OpenFileInfo &file, idx_t file_idx,
+                                                                const MultiFileBindData &bind_data) {
+	idx_t file_size;
+	if (!reads_all_columns || !file.extended_info || !FileSystem::IsRemoteFile(file.path) ||
+	    !file.extended_info->TryGetOption("file_size", file_size) || file_size > MAX_SINGLE_REQUEST_FILE_SIZE) {
+		return MultiFileReader::CreateReader(context, gstate, file, file_idx, bind_data);
+	}
+	OpenFileInfo whole_file(file.path);
+	whole_file.extended_info = make_shared_ptr<ExtendedOpenFileInfo>(*file.extended_info);
+	whole_file.extended_info->options["force_full_download"] = Value::BOOLEAN(true);
+	return MultiFileReader::CreateReader(context, gstate, whole_file, file_idx, bind_data);
 }
 
 // TODO: Audit equality-delete projection against Iceberg's normal projection rules, including name mapping.

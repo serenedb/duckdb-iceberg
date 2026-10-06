@@ -111,6 +111,10 @@ public:
 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
 	                      const vector<MultiFileColumnDefinition> &global_columns,
 	                      const vector<ColumnIndex> &global_column_ids) override;
+	using MultiFileReader::CreateReader;
+	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                        const OpenFileInfo &file, idx_t file_idx,
+	                                        const MultiFileBindData &bind_data) override;
 	ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
 	                                      const vector<MultiFileColumnDefinition> &global_columns,
 	                                      const vector<ColumnIndex> &global_column_ids,
@@ -166,8 +170,11 @@ public:
 	IcebergOptions options;
 
 private:
+	static constexpr idx_t MAX_SINGLE_REQUEST_FILE_SIZE = 16ULL * 1024 * 1024;
+
 	unique_ptr<MultiFileColumnDefinition> row_id_column;
 	unique_ptr<MultiFileColumnDefinition> last_updated_sequence_number_column;
+	bool reads_all_columns = false;
 };
 
 } // namespace duckdb
