@@ -28,8 +28,13 @@ LoadTableCachePublication::~LoadTableCachePublication() {
 	}
 }
 
-bool LoadTableCachePublication::TryPublish(unique_ptr<const rest_api_objects::LoadTableResult> result) {
-	return cache->TryPublish(*this, std::move(result));
+bool LoadTableCachePublication::TryPublish(unique_ptr<const rest_api_objects::LoadTableResult> result, string etag) {
+	return cache->TryPublish(*this, std::move(result), std::move(etag));
+}
+
+bool LoadTableCachePublication::TryRevalidate(
+    const std::function<void(const rest_api_objects::LoadTableResult &)> &apply) {
+	return cache->TryRevalidate(*this, apply);
 }
 
 unique_ptr<LoadTableCachePublication> LoadTableResultCache::BeginLoad(const string &table_key) {
@@ -39,6 +44,11 @@ unique_ptr<LoadTableCachePublication> LoadTableResultCache::BeginLoad(const stri
 	pending.latest = publication.get();
 	pending.count++;
 	publication->cache = this;
+	auto cached = tables.find(table_key);
+	if (cached != tables.end() && !cached->second.etag.empty()) {
+		publication->validator = cached->second.etag;
+		publication->validated = cached->second.load_table_result.get();
+	}
 	return publication;
 }
 
@@ -62,14 +72,31 @@ void LoadTableResultCache::InvalidateLoads(const string &table_key) {
 }
 
 bool LoadTableResultCache::TryPublish(LoadTableCachePublication &publication,
-                                      unique_ptr<const rest_api_objects::LoadTableResult> result) {
+                                      unique_ptr<const rest_api_objects::LoadTableResult> result, string etag) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	auto it = pending_loads.find(publication.table_key);
 	if (it == pending_loads.end() || it->second.latest.get() != &publication) {
 		return false;
 	}
-	Store(publication.table_key, std::move(result));
+	Store(publication.table_key, std::move(result), std::move(etag));
 	it->second.latest = nullptr;
+	return true;
+}
+
+bool LoadTableResultCache::TryRevalidate(LoadTableCachePublication &publication,
+                                         const std::function<void(const rest_api_objects::LoadTableResult &)> &apply) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	auto pending = pending_loads.find(publication.table_key);
+	if (pending == pending_loads.end() || pending->second.latest.get() != &publication) {
+		return false;
+	}
+	auto it = tables.find(publication.table_key);
+	if (it == tables.end() || it->second.load_table_result.get() != publication.validated.get()) {
+		return false;
+	}
+	it->second.expire_timestamp_ms = ExpireTimestamp();
+	apply(*it->second.load_table_result);
+	pending->second.latest = nullptr;
 	return true;
 }
 
@@ -77,28 +104,43 @@ void LoadTableResultCache::SetOrOverwrite(const string &table_key,
                                           unique_ptr<const rest_api_objects::LoadTableResult> result) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	InvalidateLoads(table_key);
-	Store(table_key, std::move(result));
+	Store(table_key, std::move(result), string());
 }
 
-void LoadTableResultCache::Store(const string &table_key, unique_ptr<const rest_api_objects::LoadTableResult> result) {
+static timestamp_ms_t ToTimestampMs(system_clock::time_point time_point) {
+	auto epoch_micros = timestamp_t(duration_cast<microseconds>(time_point.time_since_epoch()).count());
+	return timestamp_ms_t(Timestamp::GetEpochMs(epoch_micros));
+}
+
+timestamp_ms_t LoadTableResultCache::ExpireTimestamp() const {
 	// With staleness disabled, retain the payload for identity-based invalidation but expire it immediately.
-	system_clock::time_point expires_at;
 	if (attach_options.max_table_staleness_micros.IsValid()) {
-		expires_at =
-		    system_clock::now() + std::chrono::microseconds(attach_options.max_table_staleness_micros.GetIndex());
-	} else {
-		expires_at = system_clock::time_point::min();
+		return ToTimestampMs(system_clock::now() +
+		                     std::chrono::microseconds(attach_options.max_table_staleness_micros.GetIndex()));
 	}
-	auto epoch_micros = timestamp_t(duration_cast<microseconds>(expires_at.time_since_epoch()).count());
-	auto expire_timestamp_ms = timestamp_ms_t(Timestamp::GetEpochMs(epoch_micros));
+	return ToTimestampMs(system_clock::time_point::min());
+}
+
+void LoadTableResultCache::Store(const string &table_key, unique_ptr<const rest_api_objects::LoadTableResult> result,
+                                 string etag) {
+	auto expire_timestamp_ms = ExpireTimestamp();
 	tables.erase(table_key);
-	tables.emplace(table_key, MetadataCacheValue(expire_timestamp_ms, std::move(result)));
+	tables.emplace(table_key, MetadataCacheValue(expire_timestamp_ms, std::move(result), std::move(etag)));
 }
 
 void LoadTableResultCache::Evict(const string &table_key) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	InvalidateLoads(table_key);
 	tables.erase(table_key);
+}
+
+void LoadTableResultCache::Expire(const string &table_key) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	InvalidateLoads(table_key);
+	auto it = tables.find(table_key);
+	if (it != tables.end()) {
+		it->second.expire_timestamp_ms = ToTimestampMs(system_clock::time_point::min());
+	}
 }
 
 void LoadTableResultCache::EvictIfCurrent(const IcebergTable &table) {

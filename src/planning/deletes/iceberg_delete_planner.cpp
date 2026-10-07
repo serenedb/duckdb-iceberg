@@ -17,6 +17,9 @@ IcebergDeletePlanner::GetDeleteManifestsForDataFile(const IcebergDeletePlanningC
 			continue;
 		}
 		auto &delete_manifest = context.delete_manifests[manifest_idx].entry.file;
+		if (delete_manifest.sequence_number && *delete_manifest.sequence_number < context.delete_manifests_from) {
+			continue;
+		}
 		if (!file_pruner.DeleteManifestMatchesDataFile(delete_manifest, data_manifest, data_manifest_entry.entry)) {
 			continue;
 		}

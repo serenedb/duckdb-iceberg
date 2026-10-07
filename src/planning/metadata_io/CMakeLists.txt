@@ -3,7 +3,7 @@ add_subdirectory(deletes)
 add_subdirectory(manifest)
 add_subdirectory(manifest_list)
 
-add_library(iceberg_planning_metadata_io OBJECT base_manifest_reader.cpp)
+add_library(iceberg_planning_metadata_io OBJECT base_manifest_reader.cpp iceberg_metadata_cache.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:iceberg_planning_metadata_io>
     PARENT_SCOPE)

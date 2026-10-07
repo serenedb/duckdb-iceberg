@@ -42,7 +42,17 @@ bool IcebergTableSet::FillEntry(ClientContext &context, IcebergTable &table) {
 	}
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto publication = ic_catalog.table_request_cache.BeginLoad(table.GetTableKey());
-	return ApplyLoadResult(table, IRCAPI::GetTable(context, ic_catalog, schema, table.name), *publication);
+	auto result = IRCAPI::GetTable(context, ic_catalog, schema, table.name, publication->Validator());
+	if (result.status_ == HTTPStatusCode::NotModified_304) {
+		if (publication->TryRevalidate([&](const rest_api_objects::LoadTableResult &cached) {
+			    table.InitializeFromLoadTableResult(cached);
+			    table.initialization_source = cached;
+		    })) {
+			return true;
+		}
+		result = IRCAPI::GetTable(context, ic_catalog, schema, table.name);
+	}
+	return ApplyLoadResult(table, std::move(result), *publication);
 }
 
 bool IcebergTableSet::TryFillEntryFromCache(ClientContext &context, IcebergTable &table) {
@@ -92,7 +102,7 @@ bool IcebergTableSet::ApplyLoadResult(IcebergTable &table, IcebergLoadTableResul
 	table.InitializeFromLoadTableResult(load_table_result);
 	// Rejected payloads are destroyed; they must not remain as cache identities on the local table.
 	table.initialization_source = nullptr;
-	if (publication.TryPublish(std::move(get_table_result.result_))) {
+	if (publication.TryPublish(std::move(get_table_result.result_), std::move(get_table_result.etag_))) {
 		table.initialization_source = load_table_result;
 	}
 	return true;

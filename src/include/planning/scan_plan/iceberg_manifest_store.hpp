@@ -2,6 +2,7 @@
 
 #include "planning/scan_plan/iceberg_scan_plan_context.hpp"
 #include "planning/iceberg_manifest_read_state.hpp"
+#include "planning/metadata_io/iceberg_metadata_cache.hpp"
 #include "planning/metadata_io/manifest/bound_iceberg_manifest_entry.hpp"
 
 namespace duckdb {
@@ -49,6 +50,8 @@ private:
 	vector<bool> eagerly_loaded_data_manifests DUCKDB_GUARDED_BY(lock);
 	vector<reference<const IcebergManifestListEntry>> transaction_data_manifests DUCKDB_GUARDED_BY(lock);
 	unique_ptr<IcebergManifestScanningState> data_manifest_read_state DUCKDB_GUARDED_BY(lock);
+	unique_ptr<IcebergManifestCache> data_manifest_cache DUCKDB_GUARDED_BY(lock);
+	vector<idx_t> scanned_data_manifests DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb

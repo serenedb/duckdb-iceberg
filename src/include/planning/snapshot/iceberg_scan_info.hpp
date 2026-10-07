@@ -15,9 +15,9 @@ struct IcebergTransactionData;
 
 //! Used when we are not scanning from a REST Catalog
 struct IcebergScanTemporaryData {
-	explicit IcebergScanTemporaryData(IcebergTableMetadata metadata) : metadata(std::move(metadata)) {
+	explicit IcebergScanTemporaryData(shared_ptr<const IcebergTableMetadata> metadata) : metadata(std::move(metadata)) {
 	}
-	IcebergTableMetadata metadata;
+	shared_ptr<const IcebergTableMetadata> metadata;
 };
 
 struct IcebergScanInfo : public TableFunctionInfo {
@@ -29,7 +29,7 @@ public:
 	IcebergScanInfo(const string &metadata_path, unique_ptr<IcebergScanTemporaryData> owned_temp_data_p,
 	                IcebergSnapshotScanInfo snapshot_info, const IcebergTableSchema &schema)
 	    : metadata_path(metadata_path), owned_temp_data(std::move(owned_temp_data_p)),
-	      metadata(owned_temp_data->metadata), snapshot_info(snapshot_info), schema(schema) {
+	      metadata(*owned_temp_data->metadata), snapshot_info(snapshot_info), schema(schema) {
 	}
 
 public:

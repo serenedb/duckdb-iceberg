@@ -714,7 +714,19 @@ bool IcebergTable::HasTransactionUpdates() const {
 
 void IcebergTable::RefreshFromCatalog(ClientContext &context) {
 	auto publication = catalog.table_request_cache.BeginLoad(GetTableKey());
-	ApplyRefreshResult(IRCAPI::GetTable(context, catalog, schema, name), *publication);
+	auto result = IRCAPI::GetTable(context, catalog, schema, name, publication->Validator());
+	if (result.status_ == HTTPStatusCode::NotModified_304) {
+		if (publication->TryRevalidate([&](const rest_api_objects::LoadTableResult &cached) {
+			    schema_versions.clear();
+			    dummy_entry.reset();
+			    InitializeFromLoadTableResult(cached);
+			    initialization_source = cached;
+		    })) {
+			return;
+		}
+		result = IRCAPI::GetTable(context, catalog, schema, name);
+	}
+	ApplyRefreshResult(std::move(result), *publication);
 }
 
 void IcebergTable::ApplyRefreshResult(IcebergLoadTableResult get_table_result, LoadTableCachePublication &publication) {
@@ -728,7 +740,7 @@ void IcebergTable::ApplyRefreshResult(IcebergLoadTableResult get_table_result, L
 	dummy_entry.reset();
 	InitializeFromLoadTableResult(load_table_result);
 	initialization_source = nullptr;
-	if (publication.TryPublish(std::move(get_table_result.result_))) {
+	if (publication.TryPublish(std::move(get_table_result.result_), std::move(get_table_result.etag_))) {
 		initialization_source = load_table_result;
 	}
 }

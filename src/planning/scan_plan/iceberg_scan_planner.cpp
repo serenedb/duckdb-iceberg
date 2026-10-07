@@ -35,6 +35,7 @@ unique_ptr<IcebergScanPlanner> IcebergScanPlanner::CreateView(IcebergTableFilter
 	}
 	auto result = unique_ptr<IcebergScanPlanner>(new IcebergScanPlanner(shared_state));
 	result->table_filters = std::move(filters);
+	result->selected_data_files = selected_data_files;
 	if (filtered_scan_order) {
 		result->SetScanOrder(std::move(filtered_scan_order));
 	}
@@ -42,6 +43,30 @@ unique_ptr<IcebergScanPlanner> IcebergScanPlanner::CreateView(IcebergTableFilter
 		result->SortFilesByPath();
 	}
 	return result;
+}
+
+unique_ptr<IcebergScanPlanner>
+IcebergScanPlanner::SelectDataFiles(shared_ptr<const unordered_set<string>> paths) const {
+	IcebergTableFilters filters;
+	for (auto &entry : table_filters) {
+		filters.PushFilter(entry.first, entry.second->Copy());
+	}
+	auto result = CreateView(std::move(filters));
+	result->selected_data_files = std::move(paths);
+	return result;
+}
+
+bool IcebergScanPlanner::HasDeleteManifestsFrom(sequence_number_t sequence_number) const {
+	annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
+	InitializeView(guard);
+	for (idx_t manifest_idx = 0; manifest_idx < delete_manifests.size(); manifest_idx++) {
+		auto &manifest = delete_manifests[manifest_idx].entry.file;
+		if (delete_manifest_matches[manifest_idx] &&
+		    (!manifest.sequence_number || *manifest.sequence_number >= sequence_number)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 const string &IcebergScanPlanner::GetPath() const {
@@ -123,7 +148,8 @@ IcebergScanPlanProvider &IcebergScanPlanner::GetScanPlanProvider() const {
 	return shared_state->GetScanPlanProvider(table_filters, scan_order);
 }
 
-IcebergDeletePlanningContext IcebergScanPlanner::GetDeletePlanningContext() const {
+IcebergDeletePlanningContext
+IcebergScanPlanner::GetDeletePlanningContext(sequence_number_t delete_manifests_from) const {
 	return {context,
 	        fs,
 	        GetPath(),
@@ -134,7 +160,8 @@ IcebergDeletePlanningContext IcebergScanPlanner::GetDeletePlanningContext() cons
 	        data_manifests,
 	        delete_manifests,
 	        delete_manifest_matches,
-	        GetScanPlanProvider()};
+	        GetScanPlanProvider(),
+	        delete_manifests_from};
 }
 
 void IcebergScanPlanner::InitializeView(annotated_lock_guard<annotated_mutex> &guard) const {
@@ -223,6 +250,9 @@ IcebergScanPlanner::GetDataFile(idx_t file_id, annotated_lock_guard<annotated_mu
 			if (StringUtil::CIEquals(data_file.file_format, "puffin")) {
 				continue;
 			}
+			if (selected_data_files && !selected_data_files->count(entry_path)) {
+				continue;
+			}
 			data_manifest_entries.push_back(bound_entry);
 		}
 		if (data_view_cursor.current_batch_offset >= batch.end_index) {
@@ -291,7 +321,8 @@ optional<IcebergDataFileDescriptor> IcebergScanPlanner::GetDataFileDescriptor(id
 	return CreateDataFileDescriptor(data_manifest_entries[file_id]);
 }
 
-optional<IcebergFileScanTask> IcebergScanPlanner::GetScanTask(idx_t file_id) const {
+optional<IcebergFileScanTask> IcebergScanPlanner::GetScanTask(idx_t file_id,
+                                                              sequence_number_t delete_manifests_from) const {
 	optional<BoundIcebergManifestEntry> entry;
 	IcebergFileScanTask task;
 	{
@@ -307,7 +338,7 @@ optional<IcebergFileScanTask> IcebergScanPlanner::GetScanTask(idx_t file_id) con
 		    task.partition_spec_id, entry->entry.data_file.partition_info, GetMetadata(), GetSchema());
 	}
 	// Delete manifest I/O must run without the shared planning lock.
-	task.delete_files = ResolveApplicableDeleteFiles(*entry);
+	task.delete_files = ResolveApplicableDeleteFiles(*entry, delete_manifests_from);
 	return task;
 }
 
@@ -361,7 +392,8 @@ IcebergPartition IcebergScanPlanner::GetPartitionForDataFile(const string &file_
 }
 
 vector<IcebergDeleteFile>
-IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry &data_manifest_entry) const {
+IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry &data_manifest_entry,
+                                                 sequence_number_t delete_manifests_from) const {
 	vector<IcebergDeleteFile> result;
 	if (!has_matching_delete_manifests.load()) {
 		return result;
@@ -371,8 +403,8 @@ IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry
 	{
 		annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
 		InitializeView(guard);
-		manifest_indexes =
-		    IcebergDeletePlanner::GetDeleteManifestsForDataFile(GetDeletePlanningContext(), data_manifest_entry);
+		manifest_indexes = IcebergDeletePlanner::GetDeleteManifestsForDataFile(
+		    GetDeletePlanningContext(delete_manifests_from), data_manifest_entry);
 		provider = &GetScanPlanProvider();
 	}
 	if (manifest_indexes.empty()) {

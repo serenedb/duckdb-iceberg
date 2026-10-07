@@ -27,6 +27,11 @@ struct IcebergResolvedMetadata {
 	IcebergTableMetadata metadata;
 };
 
+struct IcebergSharedTableMetadata {
+	string table_location;
+	shared_ptr<const IcebergTableMetadata> metadata;
+};
+
 class IcebergUtils {
 public:
 	//! Downloads a file fully into a string
@@ -40,6 +45,8 @@ public:
 	static string GetStorageLocation(ClientContext &context, const string &input);
 	static IcebergResolvedMetadata ResolveTableMetadata(ClientContext &context, const string &input,
 	                                                    const IcebergOptions &options);
+	static IcebergSharedTableMetadata ResolveSharedTableMetadata(ClientContext &context, const string &input,
+	                                                             const IcebergOptions &options);
 	static optional_ptr<CatalogEntry> GetTableEntry(ClientContext &context, string &input_string);
 	static optional_ptr<SchemaCatalogEntry> GetSchemaEntry(ClientContext &context, string &input_string);
 	static idx_t CountOccurrences(const string &input, const string &to_find);

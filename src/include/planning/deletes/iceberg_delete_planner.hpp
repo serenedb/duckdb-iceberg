@@ -24,6 +24,7 @@ struct IcebergDeletePlanningContext {
 	const vector<BoundIcebergManifestListEntry> &delete_manifests;
 	const vector<bool> &delete_manifest_matches;
 	IcebergScanPlanProvider &provider;
+	sequence_number_t delete_manifests_from = 0;
 };
 
 struct IcebergDeletePlanner {

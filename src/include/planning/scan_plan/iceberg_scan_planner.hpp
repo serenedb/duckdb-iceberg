@@ -32,6 +32,8 @@ public:
 	~IcebergScanPlanner();
 
 	unique_ptr<IcebergScanPlanner> CreateView(IcebergTableFilters filters) const;
+	unique_ptr<IcebergScanPlanner> SelectDataFiles(shared_ptr<const unordered_set<string>> paths) const;
+	bool HasDeleteManifestsFrom(sequence_number_t sequence_number) const;
 
 	void SetTable(IcebergTableSchemaVersion &table);
 	optional_ptr<IcebergTableSchemaVersion> GetTable() const;
@@ -53,7 +55,7 @@ public:
 	bool HasTransactionData() const;
 	const IcebergSnapshotScanInfo &GetSnapshot() const;
 
-	optional<IcebergFileScanTask> GetScanTask(idx_t file_id) const;
+	optional<IcebergFileScanTask> GetScanTask(idx_t file_id, sequence_number_t delete_manifests_from = 0) const;
 	//! File enumeration only: does not resolve partition constants or load delete manifests.
 	optional<IcebergDataFileDescriptor> GetDataFileDescriptor(idx_t file_id) const;
 	idx_t GetTotalFileCount() const;
@@ -65,7 +67,8 @@ private:
 	explicit IcebergScanPlanner(shared_ptr<IcebergScanPlanState> shared_state);
 
 	IcebergScanPlanProvider &GetScanPlanProvider() const DUCKDB_REQUIRES(shared_state->lock);
-	IcebergDeletePlanningContext GetDeletePlanningContext() const DUCKDB_REQUIRES(shared_state->lock);
+	IcebergDeletePlanningContext GetDeletePlanningContext(sequence_number_t delete_manifests_from = 0) const
+	    DUCKDB_REQUIRES(shared_state->lock);
 
 	void InitializeView(annotated_lock_guard<annotated_mutex> &guard) const DUCKDB_REQUIRES(shared_state->lock);
 	void EnsureScanOrderApplied(annotated_lock_guard<annotated_mutex> &guard) const DUCKDB_REQUIRES(shared_state->lock);
@@ -77,13 +80,15 @@ private:
 	bool TryGetNextBatch(annotated_lock_guard<annotated_mutex> &guard) const DUCKDB_REQUIRES(shared_state->lock);
 	void FinishScanTasks(annotated_lock_guard<annotated_mutex> &guard) const DUCKDB_REQUIRES(shared_state->lock);
 	void StartDataManifestScan(annotated_lock_guard<annotated_mutex> &guard) const DUCKDB_REQUIRES(shared_state->lock);
-	vector<IcebergDeleteFile> ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry &data_manifest_entry) const;
+	vector<IcebergDeleteFile> ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry &data_manifest_entry,
+	                                                       sequence_number_t delete_manifests_from) const;
 
 private:
 	shared_ptr<IcebergScanPlanState> shared_state;
 	ClientContext &context;
 	FileSystem &fs;
 	IcebergTableFilters table_filters;
+	shared_ptr<const unordered_set<string>> selected_data_files;
 
 	mutable bool view_initialized DUCKDB_GUARDED_BY(shared_state->lock) = false;
 	mutable vector<BoundIcebergManifestListEntry> delete_manifests DUCKDB_GUARDED_BY(shared_state->lock);

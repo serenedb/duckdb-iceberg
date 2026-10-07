@@ -56,9 +56,9 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identi
 	if (!planner->HasScanInfo()) {
 		D_ASSERT(!planner->GetPath().empty());
 		auto resolved_metadata =
-		    IcebergUtils::ResolveTableMetadata(planner->GetContext(), planner->GetPath(), planner->GetOptions());
+		    IcebergUtils::ResolveSharedTableMetadata(planner->GetContext(), planner->GetPath(), planner->GetOptions());
 		auto temp_data = make_uniq<IcebergScanTemporaryData>(std::move(resolved_metadata.metadata));
-		auto &metadata = temp_data->metadata;
+		auto &metadata = *temp_data->metadata;
 		auto snapshot_info = metadata.GetSnapshot(*planner->GetOptions().snapshot_lookup);
 		auto &schema = metadata.GetSchemaFromId(snapshot_info.schema_id);
 		planner->SetScanInfo(make_shared_ptr<IcebergScanInfo>(resolved_metadata.table_location, std::move(temp_data),
@@ -82,6 +82,16 @@ IcebergDeletePlan IcebergMultiFileList::ProcessDeletes(const IcebergFileScanTask
 	IcebergDeleteExecutionContext execution {planner->GetContext(), FileSystem::GetFileSystem(planner->GetContext()),
 	                                         planner->GetPath(), planner->GetOptions(), planner->GetMetadata()};
 	return delete_execution->ProcessDeletes(execution, task.original_file_path, task.delete_files);
+}
+
+unique_ptr<IcebergMultiFileList>
+IcebergMultiFileList::SelectDataFiles(shared_ptr<const unordered_set<string>> paths) const {
+	auto result = unique_ptr<IcebergMultiFileList>(
+	    new IcebergMultiFileList(planner->SelectDataFiles(std::move(paths)), delete_execution));
+	result->have_bound = have_bound;
+	result->names = names;
+	result->types = types;
+	return result;
 }
 
 unique_ptr<IcebergMultiFileList>

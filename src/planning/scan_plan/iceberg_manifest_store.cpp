@@ -103,11 +103,21 @@ void IcebergManifestStore::LoadManifestList() {
 				auto manifest_list_full_path = context.options.allow_moved_paths
 				                                   ? IcebergUtils::GetFullPath(iceberg_path, snapshot.manifest_list, fs)
 				                                   : snapshot.manifest_list;
-				auto scan = AvroScan::ScanManifestList(snapshot_info, metadata, context.context,
-				                                       manifest_list_full_path, manifest_list_entries);
-				auto manifest_list_reader = make_uniq<manifest_list::ManifestListReader>(*scan);
-				while (!manifest_list_reader->Finished()) {
-					manifest_list_reader->Read();
+				auto version = manifest_list_full_path + "|" + std::to_string(metadata.iceberg_version);
+				auto &cache = ObjectCache::GetObjectCache(context.context);
+				auto cached = cache.GetWithTypePrefix<IcebergManifestListCacheEntry>(iceberg_path);
+				if (cached && cached->version == version) {
+					manifest_list_entries = cached->value;
+				} else {
+					auto scan = AvroScan::ScanManifestList(snapshot_info, metadata, context.context,
+					                                       manifest_list_full_path, manifest_list_entries);
+					auto manifest_list_reader = make_uniq<manifest_list::ManifestListReader>(*scan);
+					while (!manifest_list_reader->Finished()) {
+						manifest_list_reader->Read();
+					}
+					cache.PutWithTypePrefix<IcebergManifestListCacheEntry>(
+					    iceberg_path,
+					    make_shared_ptr<IcebergManifestListCacheEntry>(std::move(version), manifest_list_entries));
 				}
 			}
 		}
@@ -122,6 +132,8 @@ void IcebergManifestStore::LoadManifestList() {
 		}
 
 		auto &data_manifests = committed_data_manifests;
+		data_manifest_cache = make_uniq<IcebergManifestCache>(context.context, context.options, context.path,
+		                                                      snapshot_info, metadata, data_manifests);
 		eagerly_loaded_data_manifests.resize(data_manifests.size(), false);
 		vector<idx_t> manifests_to_eagerly_load;
 		for (idx_t manifest_idx = 0; manifest_idx < data_manifests.size(); manifest_idx++) {
@@ -136,7 +148,12 @@ void IcebergManifestStore::LoadManifestList() {
 
 			auto &counts = manifest.file.counts;
 			if (!counts || !counts->FilesComplete()) {
-				manifests_to_eagerly_load.push_back(manifest_idx);
+				if (data_manifest_cache->Fill(manifest_idx)) {
+					eagerly_loaded_data_manifests[manifest_idx] = true;
+					manifest.file.SetCountsFromEntries(manifest.GetManifestEntries());
+				} else {
+					manifests_to_eagerly_load.push_back(manifest_idx);
+				}
 				continue;
 			}
 
@@ -158,6 +175,7 @@ void IcebergManifestStore::LoadManifestList() {
 				manifest.file.SetCountsFromEntries(manifest.GetManifestEntries());
 				eagerly_loaded_data_manifests[manifest_idx] = true;
 			}
+			data_manifest_cache->Store(manifests_to_eagerly_load);
 		}
 	}
 
@@ -203,12 +221,15 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 		if (!matching_manifests[manifest_idx]) {
 			continue;
 		}
-		if (eagerly_loaded_data_manifests[manifest_idx]) {
-			auto &entries = committed_data_manifests[manifest_idx].GetManifestEntries();
-			read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
-		} else {
-			selected_committed_manifests.push_back(manifest_idx);
+		if (!eagerly_loaded_data_manifests[manifest_idx]) {
+			if (!data_manifest_cache || !data_manifest_cache->Fill(manifest_idx)) {
+				selected_committed_manifests.push_back(manifest_idx);
+				continue;
+			}
+			eagerly_loaded_data_manifests[manifest_idx] = true;
 		}
+		auto &entries = committed_data_manifests[manifest_idx].GetManifestEntries();
+		read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
 	}
 
 	for (idx_t transaction_idx = 0; transaction_idx < transaction_data_manifests.size(); transaction_idx++) {
@@ -221,6 +242,7 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 	}
 
 	if (!selected_committed_manifests.empty()) {
+		scanned_data_manifests = selected_committed_manifests;
 		auto data_scan = AvroScan::ScanManifest(context.snapshot, committed_data_manifests, context.options, context.fs,
 		                                        context.path, context.metadata, context.context, &read_state,
 		                                        selected_committed_manifests);
@@ -432,6 +454,9 @@ bool IcebergManifestStore::TryGetNextBatch(IcebergDataViewCursor &cursor) {
 void IcebergManifestStore::FinishScanTasks() {
 	if (data_manifest_read_state) {
 		data_manifest_read_state->executor.WorkOnTasks();
+	}
+	if (data_manifest_cache) {
+		data_manifest_cache->Store(std::exchange(scanned_data_manifests, {}));
 	}
 }
 

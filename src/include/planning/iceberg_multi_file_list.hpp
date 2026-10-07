@@ -37,6 +37,7 @@ public:
 	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
 	shared_ptr<IcebergDeleteData> GetExistingPositionalDeleteData(const string &file_path) const;
 	IcebergDeletePlan ProcessDeletes(const IcebergFileScanTask &task) const;
+	unique_ptr<IcebergMultiFileList> SelectDataFiles(shared_ptr<const unordered_set<string>> paths) const;
 	IcebergScanPlanner &GetScanPlanner();
 	const IcebergScanPlanner &GetScanPlanner() const;
 
