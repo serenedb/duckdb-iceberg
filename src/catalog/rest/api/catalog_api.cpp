@@ -166,8 +166,10 @@ bool IRCAPI::VerifyTableExistence(ClientContext &context, IcebergCatalog &catalo
 	return VerifyResponse(context, catalog, url_builder, execute_head);
 }
 
-IcebergLoadTableRequest::IcebergLoadTableRequest(vector<string> namespace_items, string table_name)
-    : namespace_items(std::move(namespace_items)), table_name(std::move(table_name)) {
+IcebergLoadTableRequest::IcebergLoadTableRequest(vector<string> namespace_items, string table_name,
+                                                 string if_none_match)
+    : namespace_items(std::move(namespace_items)), table_name(std::move(table_name)),
+      if_none_match(std::move(if_none_match)) {
 }
 
 IcebergLoadTableResult IcebergLoadTableRequest::Execute(ClientContext &context, IcebergCatalog &catalog) const {
@@ -182,9 +184,15 @@ IcebergLoadTableResult IcebergLoadTableRequest::Execute(ClientContext &context, 
 	if (catalog.attach_options.access_mode == IRCAccessDelegationMode::VENDED_CREDENTIALS) {
 		headers.Insert("X-Iceberg-Access-Delegation", "vended-credentials");
 	}
+	if (!if_none_match.empty()) {
+		headers.Insert("If-None-Match", if_none_match);
+	}
 	auto result = catalog.auth_handler->Request(RequestType::GET_REQUEST, context, url_builder, headers);
 	IcebergLoadTableResult ret;
 	ret.status_ = result->status;
+	if (result->status == HTTPStatusCode::NotModified_304 && !if_none_match.empty()) {
+		return ret;
+	}
 	if (result->status != HTTPStatusCode::OK_200) {
 		unique_ptr<JSONDocument> out_doc;
 		auto error_obj = ICUtils::GetErrorMessage(result->body, out_doc);
@@ -198,6 +206,9 @@ IcebergLoadTableResult IcebergLoadTableRequest::Execute(ClientContext &context, 
 	auto metadata_root = doc->GetRoot();
 	ret.result_ =
 	    make_uniq<const rest_api_objects::LoadTableResult>(rest_api_objects::LoadTableResult::FromJSON(metadata_root));
+	if (result->HasHeader("ETag")) {
+		ret.etag_ = result->GetHeaderValue("ETag");
+	}
 	return ret;
 }
 
@@ -220,8 +231,9 @@ static unique_ptr<HTTPResponse> LoadCredentials(ClientContext &context, IcebergC
 }
 
 IcebergLoadTableResult IRCAPI::GetTable(ClientContext &context, IcebergCatalog &catalog,
-                                        const IcebergSchemaEntry &schema, const string &table_name) {
-	return IcebergLoadTableRequest(schema.namespace_items, table_name).Execute(context, catalog);
+                                        const IcebergSchemaEntry &schema, const string &table_name,
+                                        const string &if_none_match) {
+	return IcebergLoadTableRequest(schema.namespace_items, table_name, if_none_match).Execute(context, catalog);
 }
 
 APIResult<unique_ptr<const rest_api_objects::LoadCredentialsResponse>>

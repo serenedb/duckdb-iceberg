@@ -24,8 +24,9 @@ struct IcebergTable;
 class MetadataCacheValue {
 public:
 	MetadataCacheValue(timestamp_ms_t expire_timestamp_ms,
-	                   unique_ptr<const rest_api_objects::LoadTableResult> load_table_result)
-	    : expire_timestamp_ms(expire_timestamp_ms), load_table_result(std::move(load_table_result)) {
+	                   unique_ptr<const rest_api_objects::LoadTableResult> load_table_result, string etag)
+	    : expire_timestamp_ms(expire_timestamp_ms), load_table_result(std::move(load_table_result)),
+	      etag(std::move(etag)) {
 	}
 
 public:
@@ -33,6 +34,7 @@ public:
 	timestamp_ms_t expire_timestamp_ms;
 	//! The payload of the cache entry
 	unique_ptr<const rest_api_objects::LoadTableResult> load_table_result;
+	string etag;
 };
 
 class LoadTableResultCache;
@@ -42,7 +44,11 @@ class LoadTableResultCache;
 class LoadTableCachePublication {
 public:
 	~LoadTableCachePublication();
-	bool TryPublish(unique_ptr<const rest_api_objects::LoadTableResult> result);
+	bool TryPublish(unique_ptr<const rest_api_objects::LoadTableResult> result, string etag);
+	bool TryRevalidate(const std::function<void(const rest_api_objects::LoadTableResult &)> &apply);
+	const string &Validator() const {
+		return validator;
+	}
 
 private:
 	friend class LoadTableResultCache;
@@ -53,6 +59,8 @@ private:
 
 	optional_ptr<LoadTableResultCache> cache;
 	string table_key;
+	string validator;
+	optional_ptr<const rest_api_objects::LoadTableResult> validated;
 };
 
 class LoadTableResultCache {
@@ -88,6 +96,7 @@ public:
 	//! Evict only if the table was initialized from the result that is still cached for its key.
 	void EvictIfCurrent(const IcebergTable &table);
 	void Evict(const string &table_key);
+	void Expire(const string &table_key);
 
 private:
 	friend class LoadTableCachePublication;
@@ -95,10 +104,14 @@ private:
 		optional_ptr<LoadTableCachePublication> latest;
 		idx_t count = 0;
 	};
-	bool TryPublish(LoadTableCachePublication &publication, unique_ptr<const rest_api_objects::LoadTableResult> result);
+	bool TryPublish(LoadTableCachePublication &publication, unique_ptr<const rest_api_objects::LoadTableResult> result,
+	                string etag);
+	bool TryRevalidate(LoadTableCachePublication &publication,
+	                   const std::function<void(const rest_api_objects::LoadTableResult &)> &apply);
 	void Release(LoadTableCachePublication &publication);
 	void InvalidateLoads(const string &table_key) DUCKDB_REQUIRES(lock);
-	void Store(const string &table_key, unique_ptr<const rest_api_objects::LoadTableResult> result)
+	timestamp_ms_t ExpireTimestamp() const;
+	void Store(const string &table_key, unique_ptr<const rest_api_objects::LoadTableResult> result, string etag)
 	    DUCKDB_REQUIRES(lock);
 
 	IcebergAttachOptions &attach_options;
