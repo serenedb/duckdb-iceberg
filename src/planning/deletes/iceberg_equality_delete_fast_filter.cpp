@@ -212,13 +212,15 @@ IcebergEqualityDeleteFastFilter::BuildResult IcebergEqualityDeleteFastFilterCach
 				load->error_context = std::move(error_context);
 				load->complete = true;
 			}
-			load->cv.notify_all();
 		}
 
 		IcebergEqualityDeleteFastFilter::LayoutBuildResult cached;
 		{
 			unique_lock<mutex> guard(load->lock);
-			load->cv.wait(guard, [&load] { return load->complete; });
+			auto complete = [&load]() {
+				return load->complete;
+			};
+			load->lock.Await(absl::Condition(&complete));
 			if (load->error.HasError()) {
 				load->error.Throw(load->error_context);
 			}

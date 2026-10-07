@@ -203,7 +203,7 @@ static CreateSecretInput ReVendVendedCredentials(ClientContext &context, CreateS
 		}
 	}
 	if (!match) {
-		throw InvalidConfigurationException("Could not refresh Iceberg vended credentials for table '%s': no "
+		throw InvalidConfigurationException("Could not refresh Iceberg vended credentials for table %s: no "
 		                                    "matching "
 		                                    "credential was re-vended",
 		                                    table_name);

@@ -10,7 +10,7 @@ UnsupportedIcebergViewEntry::UnsupportedIcebergViewEntry(Catalog &catalog, Schem
 }
 
 const SelectStatement &UnsupportedIcebergViewEntry::GetQuery() {
-	throw BinderException("Cannot query Iceberg view '%s': %s", name, reason);
+	throw BinderException("Cannot query Iceberg view %s: %s", name, reason);
 }
 
 void UnsupportedIcebergViewEntry::BindView(ClientContext &context, BindViewAction action) {
@@ -18,7 +18,7 @@ void UnsupportedIcebergViewEntry::BindView(ClientContext &context, BindViewActio
 }
 
 unique_ptr<CreateInfo> UnsupportedIcebergViewEntry::GetInfo() const {
-	auto info = make_uniq<CreateViewInfo>(schema, name);
+	auto info = make_uniq<CreateViewInfo>(GetQualifiedName(name));
 	info->sql = sql;
 	info->aliases = aliases;
 	return std::move(info);
@@ -30,7 +30,7 @@ string UnsupportedIcebergViewEntry::ToSQL() const {
 
 unique_ptr<CatalogEntry> UnsupportedIcebergViewEntry::Copy(ClientContext &context) const {
 	auto info = GetInfo();
-	return make_uniq<UnsupportedIcebergViewEntry>(catalog, schema, info->Cast<CreateViewInfo>(), reason);
+	return make_uniq<UnsupportedIcebergViewEntry>(catalog, ParentSchema(context), info->Cast<CreateViewInfo>(), reason);
 }
 
 } // namespace duckdb

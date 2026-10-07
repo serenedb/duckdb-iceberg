@@ -108,8 +108,8 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateTable(CatalogTransaction &t
 	}
 
 	auto &iceberg_transaction = IcebergTransaction::Get(context, catalog);
-	if (!exists && iceberg_transaction.created_schemas.find(name.GetIdentifierName()) ==
-	                   iceberg_transaction.created_schemas.end()) {
+	if (!exists.load(std::memory_order_relaxed) && iceberg_transaction.created_schemas.find(name.GetIdentifierName()) ==
+	                                                   iceberg_transaction.created_schemas.end()) {
 		throw InvalidInputException("Schema with name \"%s\" does not exist", name.GetIdentifierName());
 	}
 	auto &ir_catalog = catalog.Cast<IcebergCatalog>();
@@ -480,7 +480,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) 
 		if (tables.GetViewEntry(context, info.GetQualifiedName().Name().GetIdentifierName())) {
 			throw NotImplementedException("ALTER VIEW is not supported in Iceberg catalogs");
 		}
-		throw CatalogException("Table with name \"%s\" does not exist!", info.GetQualifiedName().Name());
+		throw CatalogException("Table with name %s does not exist!", info.GetQualifiedName().Name());
 	}
 	auto &table_entry = catalog_entry->Cast<IcebergTableSchemaVersion>();
 	auto &catalog_table_info = table_entry.table_info;
@@ -1051,7 +1051,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::LookupEntry(CatalogTransaction tr
 			// set exists to false here
 			// we would like to throw an error, but this code is also called when listing schemas,
 			// and throwing an error will abort the listing process.
-			exists = false;
+			exists.store(false, std::memory_order_relaxed);
 			return nullptr;
 		}
 	}

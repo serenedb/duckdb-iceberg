@@ -95,6 +95,12 @@ void LoadTableResultCache::Store(const string &table_key, unique_ptr<const rest_
 	tables.emplace(table_key, MetadataCacheValue(expire_timestamp_ms, std::move(result)));
 }
 
+void LoadTableResultCache::Evict(const string &table_key) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	InvalidateLoads(table_key);
+	tables.erase(table_key);
+}
+
 void LoadTableResultCache::EvictIfCurrent(const IcebergTable &table) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	// Even without a matching cached payload, a pre-write fetch must not repopulate the cache.
@@ -162,7 +168,7 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
 		if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			return created_schema->second.get();
 		}
-		throw CatalogException("Schema with name \"%s\" already exists", info.GetQualifiedName().Schema());
+		throw CatalogException("Schema with name %s already exists", info.GetQualifiedName().Schema());
 	}
 
 	// Verify schema existence on the server first
@@ -180,7 +186,7 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
 			iceberg_transaction.schemas[schema_name] = new_schema;
 			return new_schema.get();
 		}
-		throw CatalogException("Schema with name \"%s\" already exists", info.GetQualifiedName().Schema());
+		throw CatalogException("Schema with name %s already exists", info.GetQualifiedName().Schema());
 	}
 
 	// Schema does not exist - stage it locally and defer the server creation and catalog publication to commit
@@ -207,7 +213,7 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 			GetSchemas().RemoveEntry(info.GetQualifiedName().Name().GetIdentifierName());
 			return;
 		}
-		throw CatalogException("Schema with name \"%s\" does not exist", info.GetQualifiedName().Name());
+		throw CatalogException("Schema with name %s does not exist", info.GetQualifiedName().Name());
 	}
 
 	// Schema exists - defer the server deletion to commit
@@ -264,7 +270,7 @@ unique_ptr<SecretEntry> IcebergCatalog::GetStorageSecret(ClientContext &context,
 			}
 			throw InvalidConfigurationException(
 			    "Found a secret by the name of '%s', but it is not of an accepted type for a 'secret', "
-			    "accepted types are: 's3' or 'aws', found '%s'",
+			    "accepted types are: 's3' or 'aws', found %s",
 			    secret_name, secret_type);
 		}
 		throw InvalidConfigurationException(

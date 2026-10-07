@@ -26,15 +26,20 @@ IcebergScanPlanner::~IcebergScanPlanner() {
 
 unique_ptr<IcebergScanPlanner> IcebergScanPlanner::CreateView(IcebergTableFilters filters) const {
 	unique_ptr<RowGroupOrderOptions> filtered_scan_order;
+	bool filtered_sort_by_path;
 	{
 		annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
 		shared_state->FreezeConfiguration();
 		filtered_scan_order = scan_order.CopyOptions();
+		filtered_sort_by_path = sort_by_path;
 	}
 	auto result = unique_ptr<IcebergScanPlanner>(new IcebergScanPlanner(shared_state));
 	result->table_filters = std::move(filters);
 	if (filtered_scan_order) {
 		result->SetScanOrder(std::move(filtered_scan_order));
+	}
+	if (filtered_sort_by_path) {
+		result->SortFilesByPath();
 	}
 	return result;
 }
@@ -93,6 +98,11 @@ void IcebergScanPlanner::SetOptions(const IcebergOptions &new_options) {
 void IcebergScanPlanner::SetScanOrder(unique_ptr<RowGroupOrderOptions> order_options) {
 	annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
 	scan_order.Set(std::move(order_options));
+}
+
+void IcebergScanPlanner::SortFilesByPath() {
+	annotated_lock_guard<annotated_mutex> guard(shared_state->lock);
+	sort_by_path = true;
 }
 
 void IcebergScanPlanner::DisableServerSidePlanning() {
@@ -187,14 +197,13 @@ IcebergScanPlanner::GetDataFile(idx_t file_id, annotated_lock_guard<annotated_mu
 		}
 		auto &batch = data_view_cursor.current_batch;
 		auto &bound_manifest = data_manifests[batch.manifest_list_entry_idx];
-		auto &manifest_entries = bound_manifest.entry.GetManifestEntries();
 		auto &manifest_file = bound_manifest.entry.file;
 		if (!data_manifest_matches[batch.manifest_list_entry_idx]) {
 			data_view_cursor.current_batch_offset = batch.end_index;
 		}
 		for (; data_view_cursor.current_batch_offset < batch.end_index && file_id >= data_manifest_entries.size();
 		     data_view_cursor.current_batch_offset++) {
-			auto &manifest_entry = manifest_entries[data_view_cursor.current_batch_offset];
+			auto &manifest_entry = batch.entries[data_view_cursor.current_batch_offset];
 			auto &data_file = manifest_entry.data_file;
 			auto entry_path = data_file.file_path;
 			if (GetOptions().allow_moved_paths) {
@@ -224,14 +233,36 @@ IcebergScanPlanner::GetDataFile(idx_t file_id, annotated_lock_guard<annotated_mu
 }
 
 void IcebergScanPlanner::EnsureScanOrderApplied(annotated_lock_guard<annotated_mutex> &guard) const {
-	if (!scan_order.IsPending()) {
+	const bool order_pending = scan_order.IsPending();
+	const bool sort_pending = sort_by_path && !sorted_by_path;
+	if (!order_pending && !sort_pending) {
 		return;
 	}
 	idx_t materialized = 0;
 	while (GetDataFile(materialized, guard)) {
 		materialized++;
 	}
-	scan_order.Apply(context, GetSchema(), has_matching_delete_manifests.load(), data_manifest_entries);
+	if (order_pending) {
+		scan_order.Apply(context, GetSchema(), has_matching_delete_manifests.load(), data_manifest_entries);
+	}
+	if (sort_pending) {
+		vector<idx_t> order;
+		order.reserve(data_manifest_entries.size());
+		for (idx_t i = 0; i < data_manifest_entries.size(); i++) {
+			order.push_back(i);
+		}
+		auto &entries = data_manifest_entries;
+		std::sort(order.begin(), order.end(), [&entries](idx_t lhs, idx_t rhs) {
+			return entries[lhs].entry.data_file.file_path < entries[rhs].entry.data_file.file_path;
+		});
+		vector<BoundIcebergManifestEntry> sorted;
+		sorted.reserve(order.size());
+		for (auto idx : order) {
+			sorted.push_back(data_manifest_entries[idx]);
+		}
+		data_manifest_entries = std::move(sorted);
+		sorted_by_path = true;
+	}
 }
 
 IcebergDataFileDescriptor IcebergScanPlanner::CreateDataFileDescriptor(const BoundIcebergManifestEntry &entry) const {
@@ -356,7 +387,8 @@ IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry
 			throw InternalException("Delete manifest index %llu is out of bounds for %llu manifests",
 			                        delete_file.manifest_idx, delete_manifests.size());
 		}
-		auto &entries = delete_manifests[delete_file.manifest_idx].entry.GetManifestEntries();
+		auto &delete_manifest = delete_manifests[delete_file.manifest_idx].entry;
+		auto &entries = delete_manifest.GetManifestEntries();
 		if (delete_file.entry_idx >= entries.size()) {
 			throw InternalException("Delete manifest entry index %llu is out of bounds for manifest %llu",
 			                        delete_file.entry_idx, delete_file.manifest_idx);
@@ -365,7 +397,8 @@ IcebergScanPlanner::ResolveApplicableDeleteFiles(const BoundIcebergManifestEntry
 		if (IcebergDeletePlanner::DeleteEntryMatchesFilters(delete_context, delete_file.manifest_idx, delete_entry) &&
 		    IcebergDeletePlanner::DeleteEntryAppliesToDataFile(delete_context, delete_file.manifest_idx, delete_entry,
 		                                                       data_manifest_entry, partition_values)) {
-			result.emplace_back(delete_entry.data_file);
+			auto &applicable = result.emplace_back(delete_entry.data_file);
+			applicable.sequence_number = delete_entry.GetSequenceNumber(delete_manifest.file);
 		}
 	}
 	return result;

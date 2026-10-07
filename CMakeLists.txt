@@ -28,12 +28,9 @@ endif()
 # Resolve dependencies before descending into src/ so that every per-directory
 # OBJECT library inherits the include directories it needs (these commands set
 # directory-scoped properties that are inherited by subdirectories added
-# afterwards). Roaring is installed via vcpkg and used here
-find_package(roaring CONFIG REQUIRED)
-# Propagate roaring's usage requirements (its headers) to every OBJECT library
-# under src/.
-link_libraries(roaring::roaring roaring::roaring-headers
-               roaring::roaring-headers-cpp)
+# afterwards). Propagate roaring's usage requirements (its headers) to every
+# OBJECT library under src/.
+link_libraries(roaring::roaring roaring-headers roaring-headers-cpp)
 
 # Each directory under src/ contributes its sources as an OBJECT library and
 # appends them to ALL_OBJECT_FILES (see the per-directory CMakeLists.txt files).
@@ -55,11 +52,10 @@ build_loadable_extension(${TARGET_NAME} ${PARAMETERS} ${ALL_OBJECT_FILES})
 target_link_libraries(${TARGET_NAME}_loadable_extension duckdb_mbedtls)
 
 # Link Roaring library
-target_link_libraries(
-  ${EXTENSION_NAME} PUBLIC roaring::roaring roaring::roaring-headers
-                           roaring::roaring-headers-cpp)
+target_link_libraries(${EXTENSION_NAME} PUBLIC roaring::roaring roaring-headers
+                                               roaring-headers-cpp)
 target_link_libraries(${TARGET_NAME}_loadable_extension roaring::roaring
-                      roaring::roaring-headers roaring::roaring-headers-cpp)
+                      roaring-headers roaring-headers-cpp)
 
 install(
   TARGETS ${EXTENSION_NAME} ${TARGET_NAME}_loadable_extension

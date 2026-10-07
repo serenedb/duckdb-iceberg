@@ -9,8 +9,6 @@
 #include "planning/metadata_io/manifest/iceberg_manifest_reader.hpp"
 #include "planning/metadata_io/manifest_list/iceberg_manifest_list_reader.hpp"
 
-#include <condition_variable>
-
 namespace duckdb {
 
 struct IcebergManifestScanningState {
@@ -28,7 +26,6 @@ struct IcebergManifestScanningState {
 
 struct IcebergDeleteManifestLoadState {
 	mutex lock;
-	std::condition_variable cv;
 	bool complete = false;
 	ErrorData error;
 	vector<idx_t> manifest_indexes;
@@ -212,8 +209,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 			continue;
 		}
 		if (eagerly_loaded_data_manifests[manifest_idx]) {
-			auto &manifest = committed_data_manifests[manifest_idx];
-			read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, manifest.GetManifestEntries().size()});
+			auto &entries = committed_data_manifests[manifest_idx].GetManifestEntries();
+			read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
 		} else {
 			selected_committed_manifests.push_back(manifest_idx);
 		}
@@ -224,8 +221,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 		if (!matching_manifests[manifest_idx]) {
 			continue;
 		}
-		auto &manifest = transaction_data_manifests[transaction_idx];
-		read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, manifest.GetManifestEntries().size()});
+		auto &entries = transaction_data_manifests[transaction_idx].GetManifestEntries();
+		read_state.PushBatch(ManifestReadBatch {manifest_idx, 0, entries.size(), entries.data()});
 	}
 
 	if (!selected_committed_manifests.empty()) {
@@ -236,8 +233,8 @@ void IcebergManifestStore::StartDataManifestScan(const vector<bool> &matching_ma
 		    make_uniq<IcebergManifestScanningState>(context.context, std::move(data_scan), committed_data_manifests);
 
 		auto &executor = data_manifest_read_state->executor;
-		auto &scheduler = TaskScheduler::GetScheduler(context.context);
-		auto num_threads = MinValue<idx_t>(scheduler.NumberOfThreads(), selected_committed_manifests.size());
+		auto num_threads =
+		    MinValue<idx_t>(TaskScheduler::QueryThreads(context.context), selected_committed_manifests.size());
 		data_manifest_read_state->in_progress_tasks = num_threads;
 		for (idx_t i = 0; i < num_threads; i++) {
 			executor.ScheduleTask(make_uniq<ManifestReadTask>(*data_manifest_read_state));
@@ -315,8 +312,8 @@ void IcebergManifestStore::ReadDeleteManifests(const vector<idx_t> &manifest_ind
 			    make_shared_ptr<IcebergManifestScanningState>(context.context, std::move(scan), new_load->manifests);
 
 			auto &executor = new_load->scan_state->executor;
-			auto &scheduler = TaskScheduler::GetScheduler(context.context);
-			auto num_threads = MinValue<idx_t>(scheduler.NumberOfThreads(), new_load->manifest_indexes.size());
+			auto num_threads =
+			    MinValue<idx_t>(TaskScheduler::QueryThreads(context.context), new_load->manifest_indexes.size());
 			new_load->scan_state->in_progress_tasks = num_threads;
 			for (idx_t i = 0; i < num_threads; i++) {
 				executor.ScheduleTask(make_uniq<ManifestReadTask>(*new_load->scan_state));
@@ -347,12 +344,14 @@ void IcebergManifestStore::ReadDeleteManifests(const vector<idx_t> &manifest_ind
 			new_load->error = std::move(load_error);
 			new_load->complete = true;
 		}
-		new_load->cv.notify_all();
 	}
 
 	for (auto &load : required_loads) {
 		unique_lock<mutex> guard(load->lock);
-		load->cv.wait(guard, [&load] { return load->complete; });
+		auto complete = [&load]() {
+			return load->complete;
+		};
+		load->lock.Await(absl::Condition(&complete));
 		if (load->error.HasError()) {
 			load->error.Throw();
 		}

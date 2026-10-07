@@ -85,7 +85,7 @@ static unique_ptr<FunctionData> IcebergViewMetadataBind(ClientContext &context, 
 	}
 
 	auto &ic_catalog = view_catalog.Cast<IcebergCatalog>();
-	auto &ic_schema = view_entry.schema.Cast<IcebergSchemaEntry>();
+	auto &ic_schema = view_entry.ParentSchema(context).Cast<IcebergSchemaEntry>();
 
 	auto ret = make_uniq<IcebergViewMetadataBindData>(ic_catalog, ic_schema, qualified_name[2].GetIdentifierName());
 
