@@ -117,12 +117,12 @@ ORDER BY ALL;
 statement ok
 commit
 
-# nan_value_counts not yet written by DuckDB parquet writer (see iceberg_insert.cpp TODO)
-query I
-SELECT count(*) FROM iceberg_column_stats(my_datalake.default.value_counts_all_nan)
-WHERE nan_value_count IS NOT NULL;
+query II
+SELECT column_name, nan_value_count FROM iceberg_column_stats(my_datalake.default.value_counts_all_nan)
+ORDER BY column_name;
 ----
-0
+double_type	100
+float_type	100
 
 # --- Nested types from test_all_types (3 rows) ---
 statement ok
