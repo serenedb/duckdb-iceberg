@@ -174,6 +174,9 @@ void IcebergDataFileStats::PopulateFromReturnStats(ClientContext &context, Icebe
 		if (stats.null_count) {
 			data_file.null_value_counts[column_info.id] = *stats.null_count;
 		}
+		if (stats.nan_count) {
+			data_file.nan_value_counts[column_info.id] = *stats.nan_count;
+		}
 		if (stats.num_values) {
 			//! Iceberg value_counts includes nulls; Parquet num_values matches.
 			data_file.value_counts[column_info.id] = *stats.num_values;
