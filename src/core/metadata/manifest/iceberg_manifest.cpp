@@ -473,11 +473,23 @@ static Value CreateFieldID(int32_t field_id, bool nullable) {
 namespace {
 
 template <class MAP>
+static vector<const typename MAP::value_type *> EntriesByFieldId(const MAP &map) {
+	vector<const typename MAP::value_type *> entries;
+	entries.reserve(map.size());
+	for (auto &entry : map) {
+		entries.push_back(&entry);
+	}
+	std::sort(entries.begin(), entries.end(), [](auto a, auto b) { return a->first < b->first; });
+	return entries;
+}
+
+template <class MAP>
 static void WriteIntIntMap(IntIntMapWriter &writer, const MAP &map) {
-	auto list = writer.WriteList(map.size());
-	auto it = map.begin();
+	auto entries = EntriesByFieldId(map);
+	auto list = writer.WriteList(entries.size());
+	auto it = entries.begin();
 	for (auto &entry_writer : list) {
-		auto &entry = *it++;
+		auto &entry = **it++;
 		entry_writer.WriteValue([&](auto &key_writer, auto &value_writer) {
 			key_writer.WriteValue(entry.first);
 			value_writer.WriteValue(entry.second);
@@ -486,10 +498,11 @@ static void WriteIntIntMap(IntIntMapWriter &writer, const MAP &map) {
 }
 
 static void WriteBoundsMap(IntStringMapWriter &writer, const unordered_map<int32_t, Value> &bounds) {
-	auto list = writer.WriteList(bounds.size());
-	auto it = bounds.begin();
+	auto entries = EntriesByFieldId(bounds);
+	auto list = writer.WriteList(entries.size());
+	auto it = entries.begin();
 	for (auto &entry_writer : list) {
-		auto &entry = *it++;
+		auto &entry = **it++;
 		entry_writer.WriteValue([&](auto &key_writer, auto &value_writer) {
 			key_writer.WriteValue(entry.first);
 			if (entry.second.IsNull()) {
