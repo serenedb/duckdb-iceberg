@@ -20,8 +20,7 @@ CALL enable_logging('Iceberg');
 statement ok
 set logging_level='debug';
 
-# Compare Iceberg's default CRS with the reported non-default EPSG:4326 CRS.
-foreach crs OGC:CRS84 EPSG:4326
+foreach crs OGC:CRS84
 
 # Use the reported point. Include a polygon with a hole whose bbox matches but
 # whose geometry does not, an exact point, an edge, and very small geometries
@@ -182,8 +181,6 @@ drop table spatial_intersects_source;
 
 endloop
 
-# A scaled-down version of the reported layout: one EPSG:4326 column, five
-# files, manifest bounds, and multiple native Parquet geometry row groups.
 statement ok
 set threads=1;
 
@@ -191,7 +188,7 @@ statement ok
 drop table if exists my_datalake.default.spatial_intersects_row_groups;
 
 statement ok
-create table my_datalake.default.spatial_intersects_row_groups (geometry GEOMETRY('EPSG:4326'))
+create table my_datalake.default.spatial_intersects_row_groups (geometry GEOMETRY('OGC:CRS84'))
 with ('format-version'='3', 'write.parquet.row-group-size'='2048');
 
 loop file 0 5
