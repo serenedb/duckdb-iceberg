@@ -86,7 +86,7 @@ TransactionContext Error: Iceberg REST Catalog cannot commit this transaction at
 statement error con2
 select * from my_datalake.default.rename_table;
 ----
-TransactionContext Error: Current transaction is aborted (please ROLLBACK)
+TransactionContext Error: current transaction is aborted, commands ignored until end of transaction block
 
 statement ok con2
 abort

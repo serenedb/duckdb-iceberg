@@ -21,9 +21,6 @@ statement ok
 set disable_parquet_prefetching = true;
 
 statement ok
-set prefetch_all_parquet_files = false;
-
-statement ok
 DROP TABLE IF EXISTS my_datalake.default.tbl;
 
 statement ok

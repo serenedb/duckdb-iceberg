@@ -137,6 +137,9 @@ select col_a, col_b from test_view_v2 order by col_a;
 
 # Renaming the local attachment must not strand the persisted view's references.
 statement ok
+use memory.main;
+
+statement ok
 alter database my_datalake set alias to renamed_datalake;
 
 # USE paths are session state; update the active path after renaming its catalog.
@@ -149,6 +152,9 @@ select col_a, col_b from renamed_datalake.default.test_view_v2 order by col_a;
 1	hello
 2	world
 3	foo
+
+statement ok
+use memory.main;
 
 statement ok
 alter database renamed_datalake set alias to my_datalake;
