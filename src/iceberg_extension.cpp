@@ -132,7 +132,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    SetScope::GLOBAL);
 	config.AddExtensionOption("iceberg_use_server_side_scan_planning",
 	                          "Whether or not to use server-side scanning planning (if available)",
-	                          LogicalType::BOOLEAN, Value::BOOLEAN(false), nullptr, SetScope::GLOBAL);
+	                          LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	config.AddExtensionOption(
 	    "iceberg_logging_post_body_truncate_limit",
 	    "Maximum number of characters of a REST catalog POST body to include in Iceberg log messages. "
