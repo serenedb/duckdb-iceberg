@@ -363,7 +363,7 @@ IcebergListSchemasRequest::IcebergListSchemasRequest(vector<string> parent) : pa
 }
 
 IcebergListSchemasResult IcebergListSchemasRequest::Execute(ClientContext &context, IcebergCatalog &catalog) const {
-	vector<IRCAPISchema> result;
+	IcebergListSchemasResult result;
 	string page_token = "";
 	do {
 		auto url_builder = catalog.GetBaseUrl();
@@ -387,6 +387,7 @@ IcebergListSchemasResult IcebergListSchemasRequest::Execute(ClientContext &conte
 				DUCKDB_LOG_WARNING(context, "GET %s returned %s", url_builder.GetURLEncoded(),
 				                   EnumUtil::ToString(response->status));
 				// return empty result if user cannot list schemas.
+				result.complete = false;
 				return result;
 			}
 			auto url = url_builder.GetURLEncoded();
@@ -410,10 +411,11 @@ IcebergListSchemasResult IcebergListSchemasRequest::Execute(ClientContext &conte
 				auto new_parent = parent;
 				new_parent.push_back(schema_result.items.back());
 				auto nested_namespaces = IcebergListSchemasRequest(std::move(new_parent)).Execute(context, catalog);
-				result.insert(result.end(), std::make_move_iterator(nested_namespaces.begin()),
-				              std::make_move_iterator(nested_namespaces.end()));
+				result.schemas.insert(result.schemas.end(), std::make_move_iterator(nested_namespaces.schemas.begin()),
+				                      std::make_move_iterator(nested_namespaces.schemas.end()));
+				result.complete = result.complete && nested_namespaces.complete;
 			}
-			result.push_back(schema_result);
+			result.schemas.push_back(schema_result);
 		}
 
 		if (list_namespaces_response.next_page_token) {
