@@ -75,8 +75,11 @@ private:
 
 //! A refused table listing is distinct from a successful, empty listing.
 using IcebergListTablesResult = optional<vector<rest_api_objects::TableIdentifier>>;
-//! Schema listings retain already collected results if a subsequent page is refused.
-using IcebergListSchemasResult = vector<IRCAPISchema>;
+//! Schema listings retain already collected results if a subsequent page is refused; complete is false then.
+struct IcebergListSchemasResult {
+	vector<IRCAPISchema> schemas;
+	bool complete = true;
+};
 //! A refused view listing is distinct from an empty listing (including a missing namespace).
 using IcebergListViewsResult = optional<vector<rest_api_objects::TableIdentifier>>;
 

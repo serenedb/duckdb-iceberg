@@ -169,14 +169,25 @@ void IcebergSchemaSet::LoadEntriesInternal(ClientContext &context) {
 }
 
 void IcebergSchemaSet::ApplyListResult(IcebergListSchemasResult schemas) {
-	for (auto &schema : schemas) {
+	unordered_set<string> listed;
+	for (auto &schema : schemas.schemas) {
 		CreateSchemaInfo info;
 		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), Identifier(GetSchemaName(schema.items)),
 		                                    info.GetQualifiedName().Name()));
 		info.internal = false;
 		auto schema_entry = make_shared_ptr<IcebergSchemaEntry>(catalog, info);
 		schema_entry->namespace_items = std::move(schema.items);
-		CreateEntryInternal(std::move(schema_entry));
+		listed.insert(CreateEntryInternal(std::move(schema_entry))->name.GetIdentifierName());
+	}
+	if (!schemas.complete) {
+		return;
+	}
+	for (auto it = entries.begin(); it != entries.end();) {
+		if (listed.find(it->first) == listed.end()) {
+			entries.erase(it++);
+		} else {
+			++it;
+		}
 	}
 }
 
