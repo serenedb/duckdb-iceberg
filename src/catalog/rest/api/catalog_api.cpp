@@ -323,8 +323,8 @@ IcebergListTablesResult IcebergListTablesRequest::Execute(ClientContext &context
 				// when listing tables, if a user is not allowed to list a schema for one of the error reasons above
 				// we log a warning to notify the user. We do not error, otherwise the user won't be able to see any
 				// results.
-				DUCKDB_LOG_WARNING(context, "GET %s returned status code %s", url_builder.GetURLEncoded(),
-				                   EnumUtil::ToString(response->status));
+				context.WarnUser(StringUtil::Format("GET %s returned status code %s", url_builder.GetURLEncoded(),
+				                                    EnumUtil::ToString(response->status)));
 				// no listing if the user cannot list tables for a schema.
 				return nullopt;
 			}
@@ -384,8 +384,8 @@ IcebergListSchemasResult IcebergListSchemasRequest::Execute(ClientContext &conte
 				// when listing tables, if a user is not allowed to list a schema for one of the error reasons above
 				// we log a warning to notify the user. We do not error, otherwise the user won't be able to see any
 				// results.
-				DUCKDB_LOG_WARNING(context, "GET %s returned %s", url_builder.GetURLEncoded(),
-				                   EnumUtil::ToString(response->status));
+				context.WarnUser(StringUtil::Format("GET %s returned %s", url_builder.GetURLEncoded(),
+				                                    EnumUtil::ToString(response->status)));
 				// return empty result if user cannot list schemas.
 				result.complete = false;
 				return result;
@@ -661,8 +661,8 @@ IcebergListViewsResult IcebergListViewsRequest::Execute(ClientContext &context, 
 			}
 			if (response->status == HTTPStatusCode::Forbidden_403 ||
 			    response->status == HTTPStatusCode::Unauthorized_401) {
-				DUCKDB_LOG_WARNING(context, "GET %s returned status code %s", url_builder.GetURLEncoded(),
-				                   EnumUtil::ToString(response->status));
+				context.WarnUser(StringUtil::Format("GET %s returned status code %s", url_builder.GetURLEncoded(),
+				                                    EnumUtil::ToString(response->status)));
 				return nullopt;
 			}
 			auto url = url_builder.GetURLEncoded();

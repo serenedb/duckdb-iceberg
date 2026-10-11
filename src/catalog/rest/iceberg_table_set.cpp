@@ -110,8 +110,8 @@ struct PendingTableLoad {
 };
 
 void WarnTableLoadFailure(ClientContext &context, IcebergTable &table, const ErrorData &error) {
-	DUCKDB_LOG_WARNING(context, "Could not resolve the columns of Iceberg table '%s' while listing: %s",
-	                   table.GetTableKey(), error.RawMessage());
+	context.WarnUser(StringUtil::Format("Could not resolve the columns of Iceberg table '%s' while listing: %s",
+	                                    table.GetTableKey(), error.RawMessage()));
 }
 
 } // namespace
