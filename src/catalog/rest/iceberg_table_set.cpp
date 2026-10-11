@@ -119,9 +119,8 @@ void WarnTableLoadFailure(ClientContext &context, IcebergTable &table, const Err
 void IcebergTableSet::ScanEagerEntries(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
 	auto &transaction = IcebergTransaction::Get(context, catalog);
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	// Regular workers can also execute async tasks; NumberOfThreads includes the calling thread.
-	const auto window_size = MinValue<idx_t>(8, scheduler.NumberOfThreads() + scheduler.NumberOfAsyncThreads());
+	const auto window_size =
+	    MinValue<idx_t>(8, TaskScheduler::QueryThreads(context) + TaskScheduler::QueryAsyncThreads(context));
 	deque<unique_ptr<PendingTableLoad>> pending;
 	IcebergRequestExecutor executor(context, ic_catalog);
 	auto entry = entries.begin();
@@ -715,8 +714,8 @@ void IcebergTableSet::ScanViews(ClientContext &context, const std::function<void
 		shared_ptr<IcebergRequestResult<IcebergLoadViewResult>> result;
 	};
 	auto &ic_catalog = catalog.Cast<IcebergCatalog>();
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	const auto window_size = MinValue<idx_t>(8, scheduler.NumberOfThreads() + scheduler.NumberOfAsyncThreads());
+	const auto window_size =
+	    MinValue<idx_t>(8, TaskScheduler::QueryThreads(context) + TaskScheduler::QueryAsyncThreads(context));
 	deque<PendingViewLoad> pending;
 	IcebergRequestExecutor executor(context, ic_catalog);
 	auto name = names.begin();
