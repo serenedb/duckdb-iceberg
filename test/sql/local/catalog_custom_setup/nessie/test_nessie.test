@@ -116,7 +116,7 @@ attach '' as my_datalake (
 );
 
 statement ok
-call enable_logging();
+call enable_logging(level='debug');
 
 statement ok
 create schema if not exists my_datalake.new_schema;
@@ -130,7 +130,7 @@ create table my_datalake.new_schema.table_1 as select range a from range(100);
 <REGEX>:.*HTTP Error:.*uploading to.*403 Forbidden.*
 
 query I
-select message from duckdb_logs() where message like '%Failed%';
+select message from duckdb_logs() where message like 'Failed to create valid secret%';
 ----
 Failed to create valid secret from Vended Credentials for table 'table_1'
 
