@@ -283,7 +283,7 @@ unique_ptr<OAuth2Authorization> OAuth2Authorization::FromAttachOptions(AttachedD
 				    "No 'uri' was given to attach, and no 'uri' could be retrieved from the ICEBERG secret!");
 			}
 			if (!legacy_endpoint_from_secret.IsNull()) {
-				DUCKDB_LOG_WARNING(context, "The ICEBERG secret option 'endpoint' is deprecated; use 'uri' instead");
+				context.WarnUser("The ICEBERG secret option 'endpoint' is deprecated; use 'uri' instead");
 				uri_from_secret = legacy_endpoint_from_secret;
 			}
 			DUCKDB_LOG(context, IcebergLogType, "'uri' is inferred from the ICEBERG secret '%s'",
@@ -363,7 +363,7 @@ unique_ptr<BaseSecret> OAuth2Authorization::CreateCatalogSecretFunction(ClientCo
 		    "Both 'uri' and deprecated 'endpoint' were provided for an ICEBERG secret; use only 'uri'");
 	}
 	if (legacy_endpoint_option_set) {
-		DUCKDB_LOG_WARNING(context, "The ICEBERG secret option 'endpoint' is deprecated; use 'uri' instead");
+		context.WarnUser("The ICEBERG secret option 'endpoint' is deprecated; use 'uri' instead");
 	}
 
 	for (const auto &named_param : input.options) {
