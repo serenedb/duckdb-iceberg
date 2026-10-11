@@ -33,7 +33,6 @@ public:
 	//! Wait without consuming, so callers can discard responses superseded by transaction-local state.
 	template <class RESULT>
 	void WaitUntilReady(IcebergRequestResult<RESULT> &result) {
-		auto &scheduler = TaskScheduler::GetScheduler(context);
 		while (true) {
 			context.InterruptCheck();
 			if (executor.HasError()) {
@@ -46,7 +45,7 @@ public:
 			// With dedicated async workers, borrowing a request can block the caller after its awaited result
 			// is ready, leaving completed window slots unfilled. Help only when no async workers are available.
 			// Recheck on every iteration so reducing the pool to zero cannot strand queued requests.
-			if (scheduler.NumberOfAsyncThreads() == 0 && executor.GetTask(task)) {
+			if (TaskScheduler::QueryAsyncThreads(context) == 0 && executor.GetTask(task)) {
 				const auto task_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 				D_ASSERT(task_result != TaskExecutionResult::TASK_NOT_FINISHED);
 			} else {
