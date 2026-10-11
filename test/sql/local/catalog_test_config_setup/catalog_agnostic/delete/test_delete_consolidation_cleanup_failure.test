@@ -95,7 +95,7 @@ abort
 # The configured storage credentials deny removal of uncommitted files. Cleanup must report the failure.
 query I
 select count(*) from duckdb_logs()
-where type = 'Iceberg'
+where log_level = 'WARNING'
 and message like 'Iceberg Transaction Cleanup, failed to delete one or more of 2 data_file(s):%'
 and regexp_matches(message, 'AccessDenied|403 Forbidden');
 ----
