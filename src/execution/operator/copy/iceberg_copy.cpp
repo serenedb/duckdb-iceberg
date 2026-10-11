@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #include "function/copy/iceberg_copy_function.hpp"
 #include "execution/operator/iceberg_insert.hpp"
@@ -50,11 +51,12 @@ static void CheckNoExistingTable(FileSystem &fs, const CopyIcebergBindData &bind
 }
 
 //! Best effort cleanup of the files of a COPY that could not commit
-static void RemoveFilesBestEffort(FileSystem &fs, const vector<string> &files) {
+static void RemoveFilesBestEffort(ClientContext &context, FileSystem &fs, const vector<string> &files) {
 	for (auto &file : files) {
 		try {
 			fs.RemoveFile(file);
-		} catch (...) {
+		} catch (std::exception &ex) {
+			DUCKDB_LOG_WARNING(context, "Iceberg COPY cleanup, failed to delete %s: %s", file, ErrorData(ex).Message());
 		}
 	}
 }
@@ -133,7 +135,7 @@ static void WriteIcebergMetadata(ClientContext &context, CopyIcebergBindData &bi
 	try {
 		CheckNoExistingTable(fs, bind_data);
 	} catch (...) {
-		RemoveFilesBestEffort(fs, files_written);
+		RemoveFilesBestEffort(context, fs, files_written);
 		throw;
 	}
 
@@ -216,7 +218,7 @@ static void WriteIcebergMetadata(ClientContext &context, CopyIcebergBindData &bi
 	// so if another COPY to this location committed in the meantime, this one fails.
 	auto version_hint_path = fs.JoinPath(metadata_path, "version-hint.text");
 	if (!table_metadata.WriteVersionHint(context, version_hint_path, version_hint)) {
-		RemoveFilesBestEffort(fs, files_written);
+		RemoveFilesBestEffort(context, fs, files_written);
 		ThrowTableExists(bind_data);
 	}
 }

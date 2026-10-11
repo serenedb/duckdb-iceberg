@@ -123,9 +123,10 @@ unique_ptr<IcebergScanPlanProvider> IcebergScanPlanProvider::Create(IcebergScanP
 				}
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
-				DUCKDB_LOG_INFO(context.context, "Scan planning failed, Plan resulted in error: %s", error.Message());
+				DUCKDB_LOG_WARNING(context.context, "Scan planning failed, Plan resulted in error: %s",
+				                   error.Message());
 			} catch (...) {
-				DUCKDB_LOG_INFO(context.context, "Scan planning failed, Plan resulted in unknown error");
+				DUCKDB_LOG_WARNING(context.context, "Scan planning failed, Plan resulted in unknown error");
 			}
 		}
 	}
