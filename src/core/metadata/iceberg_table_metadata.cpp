@@ -190,11 +190,23 @@ static string GenerateMetaDataUrl(FileSystem &fs, const string &meta_path, strin
 	}
 	auto version_name_formats = StringUtil::Split(options.version_name_format, ',');
 	vector<string> tried_paths;
+	ErrorData refused;
 	for (auto try_format : version_name_formats) {
 		url = fs.JoinPath(meta_path, StringUtil::Format(try_format, table_version, compression_suffix));
 		tried_paths.push_back(url);
-		if (fs.FileExists(url)) {
+		ErrorData error;
+		switch (fs.TryFileExists(url, nullptr, &error)) {
+		case FileExistence::EXISTS:
 			return url;
+		case FileExistence::MISSING:
+			break;
+		case FileExistence::FORBIDDEN:
+			if (!refused.HasError()) {
+				refused = std::move(error);
+			}
+			break;
+		default:
+			error.Throw();
 		}
 	}
 
@@ -203,6 +215,9 @@ static string GenerateMetaDataUrl(FileSystem &fs, const string &meta_path, strin
 	                           "format(s): '%s', tried paths:\n",
 	                           table_version, options.metadata_compression_codec, options.version_name_format);
 	error += StringUtil::Join(tried_paths, "\n");
+	if (refused.HasError()) {
+		refused.Throw(error + "\n");
+	}
 	throw InvalidConfigurationException(error);
 }
 
