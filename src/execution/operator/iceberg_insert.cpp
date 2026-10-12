@@ -993,10 +993,6 @@ PhysicalOperator &IcebergCatalog::PlanInsert(ClientContext &context, PhysicalPla
 		throw BinderException("RETURNING clause not yet supported for insertion into Iceberg table");
 	}
 
-	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
-		throw BinderException("ON CONFLICT clause not yet supported for insertion into Iceberg table");
-	}
-
 	if (!op.column_index_map.empty()) {
 		plan = planner.ResolveDefaultsProjection(op, *plan);
 	}
