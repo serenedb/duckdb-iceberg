@@ -931,16 +931,16 @@ static void GenerateProjection(ClientContext &context, PhysicalPlanGenerator &pl
 	plan = proj;
 }
 
-static void GeneratePhysicalOrder(PhysicalPlanGenerator &planner, vector<BoundOrderByNode> &orders,
-                                  optional_ptr<PhysicalOperator> &plan) {
+static void GeneratePhysicalOrder(ClientContext &context, PhysicalPlanGenerator &planner,
+                                  vector<BoundOrderByNode> &orders, optional_ptr<PhysicalOperator> &plan) {
 	D_ASSERT(plan);
 	vector<idx_t> projections;
 	projections.reserve(plan->GetTypes().size());
 	for (idx_t i = 0; i < plan->GetTypes().size(); i++) {
 		projections.push_back(i);
 	}
-	auto &order = planner.Make<PhysicalOrder>(plan->GetTypes(), std::move(orders), std::move(projections),
-	                                          plan->estimated_cardinality);
+	auto &order = planner.Make<PhysicalOrder>(context, plan->GetTypes(), plan->GetTypes(), std::move(orders),
+	                                          std::move(projections), plan->estimated_cardinality);
 	order.children.push_back(*plan);
 	plan = order;
 }
@@ -953,7 +953,7 @@ IcebergCopyToFile &IcebergInsert::PlanCopyForInsert(ClientContext &context, Phys
 	// Sort expressions reference the child plan output, so order before the projection changes the layout.
 	// Partitioned writes are sorted per partition by the copy operator itself.
 	if (!copy_input.partition_spec && !copy_options.order_columns.empty() && plan) {
-		GeneratePhysicalOrder(planner, copy_options.order_columns, plan);
+		GeneratePhysicalOrder(context, planner, copy_options.order_columns, plan);
 	}
 
 	// Produce the data file layout: drops columns that are not written (unknown) and computes
