@@ -22,7 +22,7 @@ with (
 query I
 insert into my_datalake.default.rewrite_target_file_size
 select i, concat('thisisalongstring', i)
-from range(500000) t(i);
+from range_st(500000) t(i);
 ----
 500000
 
