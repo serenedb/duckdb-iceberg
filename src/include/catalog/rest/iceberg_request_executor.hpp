@@ -49,6 +49,7 @@ public:
 				const auto task_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 				D_ASSERT(task_result != TaskExecutionResult::TASK_NOT_FINISHED);
 			} else {
+				TaskScheduler::BlockingScope blocking;
 				unique_lock<mutex> guard(result.lock);
 				auto ready = [&]() {
 					return result.ready;
