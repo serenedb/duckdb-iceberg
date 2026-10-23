@@ -2,6 +2,16 @@
 
 namespace duckdb {
 
+namespace {
+
+struct RoaringIteratorFree {
+	void operator()(roaring::api::roaring64_iterator_t *iterator) const {
+		roaring::api::roaring64_iterator_free(iterator);
+	}
+};
+
+} // namespace
+
 unique_ptr<DeleteFilter> IcebergPositionalDeleteData::ToFilter() const {
 	return make_uniq<IcebergPositionalDeleteFilter>(shared_from_this());
 }
@@ -27,8 +37,7 @@ idx_t IcebergPositionalDeleteFilter::Filter(row_t start_row_index, idx_t count, 
 	// Seek independently for each range: filters can be consumed out of order or
 	// concurrently, while the shared bitmap remains immutable.
 	using namespace roaring::api;
-	unique_ptr<roaring64_iterator_t, decltype(&roaring64_iterator_free)> deleted(
-	    roaring64_iterator_create(data->invalid_rows.get()), roaring64_iterator_free);
+	unique_ptr<roaring64_iterator_t, RoaringIteratorFree> deleted(roaring64_iterator_create(data->invalid_rows.get()));
 	if (!deleted) {
 		throw OutOfMemoryException("Failed to allocate Iceberg positional delete iterator");
 	}
