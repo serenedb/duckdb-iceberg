@@ -6,11 +6,17 @@
 
 namespace duckdb {
 
+struct RoaringBitmapFree {
+	void operator()(roaring::api::roaring64_bitmap_t *bitmap) const {
+		roaring::api::roaring64_bitmap_free(bitmap);
+	}
+};
+
 struct IcebergPositionalDeleteData : public enable_shared_from_this<IcebergPositionalDeleteData>, IcebergDeleteData {
 public:
 	IcebergPositionalDeleteData(const IcebergFileIdentity &file)
 	    : IcebergDeleteData(IcebergDeleteType::POSITIONAL_DELETE, file),
-	      invalid_rows(roaring::api::roaring64_bitmap_create(), roaring::api::roaring64_bitmap_free) {
+	      invalid_rows(roaring::api::roaring64_bitmap_create()) {
 		if (!invalid_rows) {
 			throw OutOfMemoryException("Failed to allocate Iceberg positional delete bitmap");
 		}
@@ -32,7 +38,7 @@ public:
 
 public:
 	//! Compressed positions retaining all 64 bits of each row ID.
-	unique_ptr<roaring::api::roaring64_bitmap_t, decltype(&roaring::api::roaring64_bitmap_free)> invalid_rows;
+	unique_ptr<roaring::api::roaring64_bitmap_t, RoaringBitmapFree> invalid_rows;
 
 private:
 	//! Reuse the container lookup across adjacent positions while loading deletes.
