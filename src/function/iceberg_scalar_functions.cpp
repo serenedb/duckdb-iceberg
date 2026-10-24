@@ -228,9 +228,8 @@ static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &inp
 	Value width_val;
 	if (width_expr.IsFoldable() &&
 	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), width_expr, width_val)) {
-		if (!width_val.IsNull() && width_val.GetValue<int32_t>() <= 0) {
-			throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d",
-			                            width_val.GetValue<int32_t>());
+		if (!width_val.IsNull()) {
+			IcebergHash::TruncateWidth(width_val.GetValue<int32_t>());
 		}
 	}
 	return nullptr;
@@ -239,20 +238,21 @@ static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &inp
 static void IcebergTruncateInteger(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t W, int32_t v) -> int32_t { return v - (((v % W) + W) % W); });
+	    [](int32_t W, int32_t v) -> int32_t { return IcebergHash::TruncateInteger(W, v); });
 }
 
 static void IcebergTruncateBigInt(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, int64_t, int64_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [](int32_t W, int64_t v) -> int64_t { return v - (((v % W) + W) % W); });
+	    [](int32_t W, int64_t v) -> int64_t { return IcebergHash::TruncateInteger(W, v); });
 }
 
 static void IcebergTruncateVarchar(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<int32_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&result](int32_t L, string_t val) -> string_t {
 		    auto data = val.GetData();
-		    auto length = IcebergHash::TruncatedStringLength(data, val.GetSize(), static_cast<idx_t>(L));
+		    auto length = IcebergHash::TruncatedStringLength(data, val.GetSize(),
+		                                                     static_cast<idx_t>(IcebergHash::TruncateWidth(L)));
 		    return StringVector::AddString(result, data, length);
 	    });
 }
@@ -261,43 +261,16 @@ static void IcebergTruncateBlob(DataChunk &input, ExpressionState &state, Vector
 	BinaryExecutor::Execute<int32_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&result](int32_t L, string_t val) -> string_t {
 		    auto size = val.GetSize();
-		    auto truncated = static_cast<idx_t>(L) < size ? static_cast<idx_t>(L) : size;
+		    auto width = static_cast<idx_t>(IcebergHash::TruncateWidth(L));
+		    auto truncated = width < size ? width : size;
 		    return StringVector::AddStringOrBlob(result, val.GetData(), truncated);
 	    });
 }
 
-static void IcebergTruncateDecimalInt16(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<int32_t, int16_t, int16_t>(input.data[0], input.data[1], result, input.size(),
-	                                                   [](int32_t W, int16_t v) -> int16_t {
-		                                                   int64_t val = static_cast<int64_t>(v);
-		                                                   int64_t w = static_cast<int64_t>(W);
-		                                                   return static_cast<int16_t>(val - (((val % w) + w) % w));
-	                                                   });
-}
-
-static void IcebergTruncateDecimalInt32(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(input.data[0], input.data[1], result, input.size(),
-	                                                   [](int32_t W, int32_t v) -> int32_t {
-		                                                   int64_t val = static_cast<int64_t>(v);
-		                                                   int64_t w = static_cast<int64_t>(W);
-		                                                   return static_cast<int32_t>(val - (((val % w) + w) % w));
-	                                                   });
-}
-
-static void IcebergTruncateDecimalInt64(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<int32_t, int64_t, int64_t>(input.data[0], input.data[1], result, input.size(),
-	                                                   [](int32_t W, int64_t v) -> int64_t {
-		                                                   int64_t w = static_cast<int64_t>(W);
-		                                                   return v - (((v % w) + w) % w);
-	                                                   });
-}
-
-static void IcebergTruncateDecimalHugeInt(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<int32_t, hugeint_t, hugeint_t>(input.data[0], input.data[1], result, input.size(),
-	                                                       [](int32_t W, hugeint_t v) -> hugeint_t {
-		                                                       hugeint_t w = hugeint_t(W);
-		                                                       return v - (((v % w) + w) % w);
-	                                                       });
+template <class T>
+static void IcebergTruncateDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
+	BinaryExecutor::Execute<int32_t, T, T>(input.data[0], input.data[1], result, input.size(),
+	                                       [](int32_t W, T v) -> T { return IcebergHash::TruncateDecimal(W, v); });
 }
 
 static unique_ptr<FunctionData> IcebergTruncateDecimalBind(BindScalarFunctionInput &input) {
@@ -310,9 +283,8 @@ static unique_ptr<FunctionData> IcebergTruncateDecimalBind(BindScalarFunctionInp
 	Value width_val;
 	if (width_expr.IsFoldable() &&
 	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), width_expr, width_val)) {
-		if (!width_val.IsNull() && width_val.GetValue<int32_t>() <= 0) {
-			throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d",
-			                            width_val.GetValue<int32_t>());
+		if (!width_val.IsNull()) {
+			IcebergHash::TruncateWidth(width_val.GetValue<int32_t>());
 		}
 	}
 	auto &decimal_type = arguments[1]->GetReturnType();
@@ -320,16 +292,16 @@ static unique_ptr<FunctionData> IcebergTruncateDecimalBind(BindScalarFunctionInp
 	bound_function.SetReturnType(decimal_type);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		bound_function.SetFunctionCallback(IcebergTruncateDecimalInt16);
+		bound_function.SetFunctionCallback(IcebergTruncateDecimal<int16_t>);
 		break;
 	case PhysicalType::INT32:
-		bound_function.SetFunctionCallback(IcebergTruncateDecimalInt32);
+		bound_function.SetFunctionCallback(IcebergTruncateDecimal<int32_t>);
 		break;
 	case PhysicalType::INT64:
-		bound_function.SetFunctionCallback(IcebergTruncateDecimalInt64);
+		bound_function.SetFunctionCallback(IcebergTruncateDecimal<int64_t>);
 		break;
 	default: // INT128
-		bound_function.SetFunctionCallback(IcebergTruncateDecimalHugeInt);
+		bound_function.SetFunctionCallback(IcebergTruncateDecimal<hugeint_t>);
 		break;
 	}
 	return nullptr;
@@ -351,6 +323,7 @@ ScalarFunctionSet IcebergFunctions::GetIcebergTruncateFunction() {
 		set.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType(LogicalTypeId::DECIMAL)},
 		                               LogicalType(LogicalTypeId::DECIMAL), null_fn, IcebergTruncateDecimalBind));
 	}
+	set.SetFallible();
 	return set;
 }
 

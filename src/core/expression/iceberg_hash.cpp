@@ -322,22 +322,26 @@ idx_t IcebergHash::TruncatedStringLength(const char *data, idx_t size, idx_t wid
 //! Canonical truncate computation shared by TruncateTransform::ApplyTransform and the scalar function.
 //! Input must not be null; throws for unsupported types.
 Value IcebergHash::TruncateValue(const Value &v, idx_t width) {
-	auto W = static_cast<int64_t>(width);
+	auto W = TruncateWidth(static_cast<int64_t>(width));
 	switch (v.type().id()) {
-	case LogicalTypeId::INTEGER: {
-		auto val = static_cast<int64_t>(v.GetValue<int32_t>());
-		return Value::INTEGER(static_cast<int32_t>(val - (((val % W) + W) % W)));
-	}
-	case LogicalTypeId::BIGINT: {
-		auto val = v.GetValue<int64_t>();
-		return Value::BIGINT(val - (((val % W) + W) % W));
-	}
+	case LogicalTypeId::INTEGER:
+		return Value::INTEGER(TruncateInteger(W, v.GetValue<int32_t>()));
+	case LogicalTypeId::BIGINT:
+		return Value::BIGINT(TruncateInteger(W, v.GetValue<int64_t>()));
 	case LogicalTypeId::DECIMAL: {
 		// Truncate the unscaled integer value, preserving type (scale/precision)
-		auto scaled = v.WithType(LogicalType::BIGINT);
-		auto val = scaled.GetValue<int64_t>();
-		auto result = val - (((val % W) + W) % W);
-		return Value::DECIMAL(result, DecimalType::GetWidth(v.type()), DecimalType::GetScale(v.type()));
+		auto decimal_width = DecimalType::GetWidth(v.type());
+		auto scale = DecimalType::GetScale(v.type());
+		switch (v.type().InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(TruncateDecimal(W, v.GetValueUnsafe<int16_t>()), decimal_width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(TruncateDecimal(W, v.GetValueUnsafe<int32_t>()), decimal_width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(TruncateDecimal(W, v.GetValueUnsafe<int64_t>()), decimal_width, scale);
+		default:
+			return Value::DECIMAL(TruncateDecimal(W, v.GetValueUnsafe<hugeint_t>()), decimal_width, scale);
+		}
 	}
 	case LogicalTypeId::BLOB: {
 		auto bytes = StringValue::Get(v);

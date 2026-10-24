@@ -218,6 +218,51 @@ SELECT iceberg_truncate(0, '\x01\x02'::BLOB);
 ----
 <REGEX>:.*width must be a positive integer.*
 
+statement error
+SELECT iceberg_truncate(w, 1::INTEGER) FROM (VALUES (0)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+statement error
+SELECT iceberg_truncate(w, 1::BIGINT) FROM (VALUES (-3)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+statement error
+SELECT iceberg_truncate(w, 'iceberg') FROM (VALUES (0)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+statement error
+SELECT iceberg_truncate(w, '\x01\x02'::BLOB) FROM (VALUES (-1)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+statement error
+SELECT iceberg_truncate(w, 1.5::DECIMAL(4, 1)) FROM (VALUES (0)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+statement error
+SELECT iceberg_truncate(w, 1.5::DECIMAL(38, 1)) FROM (VALUES (0)) t(w);
+----
+<REGEX>:.*width must be a positive integer.*
+
+query II
+SELECT iceberg_truncate(3, (-2147483647)::INTEGER), iceberg_truncate(3, (-9223372036854775807)::BIGINT);
+----
+2147483647	9223372036854775807
+
+query II
+SELECT iceberg_truncate(10, (-1.05)::DECIMAL(4, 2)), iceberg_truncate(10, (-1.05)::DECIMAL(38, 2));
+----
+-1.10	-1.10
+
+statement error
+SELECT iceberg_truncate(100000, (-1.0)::DECIMAL(4, 1));
+----
+<REGEX>:.*out of range.*
+
 query I
 SELECT TRY(iceberg_truncate(('x' || '')::INTEGER, 1000));
 ----
