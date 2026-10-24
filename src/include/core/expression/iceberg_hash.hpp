@@ -12,12 +12,17 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 
@@ -51,6 +56,42 @@ public:
 	static Value TruncateValue(const Value &v, idx_t width);
 	//! Byte length of the first `width` Unicode code points of a UTF-8 string (Iceberg truncate[L] on strings)
 	static idx_t TruncatedStringLength(const char *data, idx_t size, idx_t width);
+
+	static int32_t TruncateWidth(int64_t width) {
+		if (width <= 0 || width > NumericLimits<int32_t>::Maximum()) {
+			throw InvalidInputException("iceberg_truncate: width must be a positive integer, got %d", width);
+		}
+		return static_cast<int32_t>(width);
+	}
+
+	template <class T>
+	static T TruncateInteger(int64_t width, T value) {
+		using UNSIGNED = std::make_unsigned_t<T>;
+		const T w = TruncateWidth(width);
+		const auto shifted = static_cast<T>(static_cast<UNSIGNED>(value % w) + static_cast<UNSIGNED>(w));
+		return static_cast<T>(static_cast<UNSIGNED>(value) - static_cast<UNSIGNED>(shifted % w));
+	}
+
+	template <class T>
+	static T TruncateDecimal(int64_t width, T value) {
+		const int64_t w = TruncateWidth(width);
+		const int64_t v = value;
+		int64_t result;
+		if (!TrySubtractOperator::Operation(v, ((v % w) + w) % w, result) || result < NumericLimits<T>::Minimum()) {
+			throw OutOfRangeException("iceberg_truncate: %d truncated to a multiple of %d is out of range", v, w);
+		}
+		return static_cast<T>(result);
+	}
+
+	static hugeint_t TruncateDecimal(int64_t width, hugeint_t value) {
+		const hugeint_t w(TruncateWidth(width));
+		hugeint_t result;
+		if (!TrySubtractOperator::Operation(value, ((value % w) + w) % w, result)) {
+			throw OutOfRangeException("iceberg_truncate: %s truncated to a multiple of %d is out of range",
+			                          value.ToString(), width);
+		}
+		return result;
+	}
 
 private:
 	static constexpr uint32_t C1 = 0xcc9e2d51;
