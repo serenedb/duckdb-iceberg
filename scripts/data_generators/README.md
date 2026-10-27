@@ -5,6 +5,7 @@ Run it with pytest, one catalog per invocation:
 
 The generator uses PySpark with the Iceberg extension to populate the active catalog for every registered `IcebergTest`.
 Intermediates for each step are saved to `data/generated/intermediates/{connection_key}/{table}/{step}`.
+`ICEBERG_GENERATED_DIR`, when set, takes the place of `data/generated` for everything the generator writes, so the data can live at a fixed path: the tables it writes record absolute paths.
 
 ### Validation
 - count(*) after each step

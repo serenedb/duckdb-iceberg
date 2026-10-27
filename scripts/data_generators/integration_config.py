@@ -12,6 +12,7 @@ from packaging.version import Version
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GENERATED_DIR = Path(os.environ.get("ICEBERG_GENERATED_DIR") or REPO_ROOT / "data" / "generated")
 TEST_CONFIG_DIR = REPO_ROOT / "test" / "configs"
 DATA_GENERATORS_DIR = REPO_ROOT / "scripts" / "data_generators"
 ACTIVE_CATALOG_FILE = REPO_ROOT / ".catalogs" / ".active_catalog"
