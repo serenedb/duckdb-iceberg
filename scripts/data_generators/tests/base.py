@@ -3,8 +3,10 @@ from pathlib import Path
 from typing import Type, List
 import shutil
 
+from scripts.data_generators.integration_config import GENERATED_DIR
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-INTERMEDIATE_DIR = SCRIPT_DIR.parent.parent.parent / 'data' / 'generated' / 'intermediates'
+INTERMEDIATE_DIR = GENERATED_DIR / 'intermediates'
 
 
 def cleanup_generated_table(con, qualified_name: str) -> None:

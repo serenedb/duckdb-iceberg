@@ -1,16 +1,13 @@
-import os
-
 import pyspark
 import pyspark.sql
 
 from ..base import IcebergConnection
-from scripts.data_generators.integration_config import get_spark_runtime
+from scripts.data_generators.integration_config import GENERATED_DIR, get_spark_runtime
 
 
 CONNECTION_KEY = "local"
 
-SCRIPT_DIR = os.path.dirname(__file__)
-DATA_GENERATION_DIR = os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "data", "generated", "iceberg", "spark-local")
+DATA_GENERATION_DIR = str(GENERATED_DIR / "iceberg" / "spark-local")
 
 
 @IcebergConnection.register(CONNECTION_KEY)

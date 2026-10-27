@@ -1,11 +1,9 @@
+from scripts.data_generators.integration_config import GENERATED_DIR
 from scripts.data_generators.tests.base import IcebergTest
 import pathlib
 import duckdb
 
-import os
-
-SCRIPT_DIR = os.path.dirname(__file__)
-FILES_DIR = os.path.join(SCRIPT_DIR, '..', '..', '..', '..', '..', 'data', 'generated', 'files')
+FILES_DIR = GENERATED_DIR / 'files'
 
 def generate_files():
     n_rows = 100_000
