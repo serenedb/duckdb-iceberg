@@ -134,7 +134,8 @@ static string ExtractIcebergScanPath(const string &sql) {
 	return sql.substr(start, end - start);
 }
 
-optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(ClientContext &context, string &input_string) {
+optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(CatalogEntryRetriever &retriever, string &input_string) {
+	auto &context = retriever.GetContext();
 	auto qualified_name = QualifiedName::ParseComponents(input_string);
 	auto default_db = DatabaseManager::GetDefaultDatabase(context);
 	auto &catalog = Catalog::GetCatalog(context, Identifier(default_db));
@@ -142,14 +143,14 @@ optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(ClientContext &context, s
 	case 3: {
 		auto lookup_info = EntryLookupInfo(CatalogType::TABLE_ENTRY,
 		                                   QualifiedName(qualified_name[0], qualified_name[1], qualified_name[2]));
-		auto table = Catalog::GetEntry(context, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
-		return table;
+		return retriever.GetEntry(lookup_info, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	case 2: {
 		// make sure default catalog is iceberg
-		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, Identifier(qualified_name[0]),
-		                                    Identifier(qualified_name[1]), OnEntryNotFound::THROW_EXCEPTION);
-		return table_entry;
+		auto lookup_info = EntryLookupInfo(
+		    CatalogType::TABLE_ENTRY,
+		    QualifiedName(Identifier(default_db), Identifier(qualified_name[0]), Identifier(qualified_name[1])));
+		return retriever.GetEntry(lookup_info, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	case 1: {
 		auto schema = catalog.GetDefaultSchema();
@@ -158,25 +159,27 @@ optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(ClientContext &context, s
 			    "Cannot resolve table name %s - catalog %s has no default schema, qualify the name with a schema",
 			    input_string, catalog.GetName());
 		}
-		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, *schema, Identifier(qualified_name[0]),
-		                                    OnEntryNotFound::THROW_EXCEPTION);
-		return table_entry;
+		auto lookup_info = EntryLookupInfo(
+		    CatalogType::TABLE_ENTRY, QualifiedName(Identifier(default_db), *schema, Identifier(qualified_name[0])));
+		return retriever.GetEntry(lookup_info, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	default:
 		throw InvalidInputException("Too many identifiers in table name %s", input_string);
 	}
 }
 
-optional_ptr<SchemaCatalogEntry> IcebergUtils::GetSchemaEntry(ClientContext &context, string &input_string) {
+optional_ptr<SchemaCatalogEntry> IcebergUtils::GetSchemaEntry(CatalogEntryRetriever &retriever, string &input_string) {
 	auto qualified_name = QualifiedName::ParseComponents(input_string);
-	auto default_db = DatabaseManager::GetDefaultDatabase(context);
+	auto default_db = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 
 	switch (qualified_name.size()) {
 	case 1: {
 		// input: schema
 		// we assume the catalog from context
-		auto &catalog = Catalog::GetCatalog(context, Identifier(default_db));
-		return catalog.GetSchema(context, Identifier(qualified_name[0]), OnEntryNotFound::THROW_EXCEPTION);
+		return retriever.GetSchema(
+		    EntryLookupInfo(CatalogType::SCHEMA_ENTRY,
+		                    QualifiedName(Identifier(default_db), Identifier(), Identifier(qualified_name[0]))),
+		    OnEntryNotFound::THROW_EXCEPTION);
 	}
 	default: {
 		// input: catalog.schema (schema may contain dots for nested namespaces)
@@ -185,13 +188,13 @@ optional_ptr<SchemaCatalogEntry> IcebergUtils::GetSchemaEntry(ClientContext &con
 		auto schema_name = StringUtil::Join(schema_parts, ".");
 		auto lookup_info = EntryLookupInfo(CatalogType::SCHEMA_ENTRY,
 		                                   QualifiedName(catalog_name, Identifier(), Identifier(schema_name)));
-		auto retriever = CatalogEntryRetriever(context);
 		return retriever.GetSchema(lookup_info, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	}
 }
 
-string IcebergUtils::GetStorageLocation(ClientContext &context, const string &input) {
+string IcebergUtils::GetStorageLocation(CatalogEntryRetriever &retriever, const string &input) {
+	auto &context = retriever.GetContext();
 	auto qualified_name = QualifiedName::ParseComponents(input);
 	string storage_location = input;
 
@@ -202,7 +205,7 @@ string IcebergUtils::GetStorageLocation(ClientContext &context, const string &in
 		//! Fully qualified table reference, let's do a lookup
 		EntryLookupInfo table_info(CatalogType::TABLE_ENTRY,
 		                           QualifiedName(qualified_name[0], qualified_name[1], qualified_name[2]));
-		auto catalog_entry = Catalog::GetEntry(context, table_info, OnEntryNotFound::RETURN_NULL);
+		auto catalog_entry = retriever.GetEntry(table_info, OnEntryNotFound::RETURN_NULL);
 		if (!catalog_entry) {
 			break;
 		}
@@ -229,14 +232,15 @@ string IcebergUtils::GetStorageLocation(ClientContext &context, const string &in
 	return storage_location;
 }
 
-IcebergResolvedMetadata IcebergUtils::ResolveTableMetadata(ClientContext &context, const string &input,
+IcebergResolvedMetadata IcebergUtils::ResolveTableMetadata(CatalogEntryRetriever &retriever, const string &input,
                                                            const IcebergOptions &options) {
+	auto &context = retriever.GetContext();
 	auto qualified_name = QualifiedName::ParseComponents(input);
 	if (qualified_name.size() == 3) {
 		auto table_name =
 		    QualifiedName(Identifier(qualified_name[0]), Identifier(qualified_name[1]), Identifier(qualified_name[2]));
 		EntryLookupInfo table_info(CatalogType::TABLE_ENTRY, std::move(table_name));
-		auto catalog_entry = Catalog::GetEntry(context, table_info, OnEntryNotFound::RETURN_NULL);
+		auto catalog_entry = retriever.GetEntry(table_info, OnEntryNotFound::RETURN_NULL);
 		if (catalog_entry && catalog_entry->type == CatalogType::TABLE_ENTRY) {
 			auto &table = catalog_entry->Cast<TableCatalogEntry>();
 			if (table.catalog.GetCatalogType() != "iceberg") {
@@ -250,7 +254,7 @@ IcebergResolvedMetadata IcebergUtils::ResolveTableMetadata(ClientContext &contex
 		}
 	}
 
-	auto table_location = GetStorageLocation(context, input);
+	auto table_location = GetStorageLocation(retriever, input);
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto caching_fs = make_shared_ptr<CachingFileSystemWrapper>(fs, *context.db);
 	auto metadata_path = IcebergTableMetadata::GetMetaDataPath(context, table_location, fs, options);

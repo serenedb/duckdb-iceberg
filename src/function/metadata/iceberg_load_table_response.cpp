@@ -78,7 +78,9 @@ static unique_ptr<FunctionData> IcebergLoadTableResponseBind(ClientContext &cont
 
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY,
 	                             QualifiedName(qualified_name[0], qualified_name[1], qualified_name[2]));
-	auto catalog_entry = Catalog::GetEntry(context, table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto catalog_entry = retriever.GetEntry(table_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
 		throw InvalidInputException("'%s' is not a table", input_string);

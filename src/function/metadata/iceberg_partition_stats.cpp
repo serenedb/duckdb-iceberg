@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -61,7 +62,9 @@ static unique_ptr<FunctionData> IcebergPartitionStatsBind(ClientContext &context
 
 	auto input_string = input.inputs[0].ToString();
 	IcebergOptions options(input.named_parameters);
-	auto resolved_metadata = IcebergUtils::ResolveTableMetadata(context, input_string, options);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto resolved_metadata = IcebergUtils::ResolveTableMetadata(retriever, input_string, options);
 	ret->metadata = std::move(resolved_metadata.metadata);
 
 	ret->snapshot_to_scan = ret->metadata.GetSnapshot(*options.snapshot_lookup);
