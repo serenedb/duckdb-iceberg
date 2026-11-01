@@ -65,7 +65,9 @@ static unique_ptr<FunctionData> SetIcebergSchemaPropertiesBind(ClientContext &co
 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
 
 	auto input_string = input.inputs[0].ToString();
-	auto iceberg_schema = IcebergUtils::GetSchemaEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_schema = IcebergUtils::GetSchemaEntry(retriever, input_string, AclMode::Own);
 	if (!CheckEntryIsIcebergSchema(iceberg_schema)) {
 		throw InvalidInputException("Cannot call set_iceberg_schema_properties on non-iceberg schema");
 	}
@@ -97,7 +99,9 @@ static unique_ptr<FunctionData> RemoveIcebergSchemaPropertiesBind(ClientContext 
                                                                   vector<Identifier> &names) {
 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
 	auto input_string = input.inputs[0].ToString();
-	auto iceberg_schema = IcebergUtils::GetSchemaEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_schema = IcebergUtils::GetSchemaEntry(retriever, input_string, AclMode::Own);
 	if (!CheckEntryIsIcebergSchema(iceberg_schema)) {
 		throw InvalidInputException("Cannot call remove_iceberg_schema_properties on non-iceberg schema");
 	}
@@ -127,7 +131,9 @@ static unique_ptr<FunctionData> GetIcebergSchemaPropertiesBind(ClientContext &co
                                                                vector<Identifier> &names) {
 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
 	auto input_string = input.inputs[0].ToString();
-	auto iceberg_schema = IcebergUtils::GetSchemaEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_schema = IcebergUtils::GetSchemaEntry(retriever, input_string);
 	if (!CheckEntryIsIcebergSchema(iceberg_schema)) {
 		throw InvalidInputException("Cannot call get_iceberg_schema_properties on non-iceberg schema");
 	}

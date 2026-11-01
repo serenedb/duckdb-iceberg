@@ -97,7 +97,9 @@ static unique_ptr<FunctionData> SetIcebergTablePropertiesBind(ClientContext &con
 
 	auto input_string = input.inputs[0].ToString();
 	VerifyInputIsNotAFile(context, input_string, "set_iceberg_table_properties");
-	auto iceberg_table = IcebergUtils::GetTableEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_table = IcebergUtils::GetTableEntry(retriever, input_string, AclMode::Own);
 	if (!CheckTableIsIcebergTable(iceberg_table)) {
 		throw InvalidInputException("Cannot call set_iceberg_table_properties on non-iceberg table");
 	}
@@ -132,7 +134,9 @@ static unique_ptr<FunctionData> RemoveIcebergTablePropertiesBind(ClientContext &
 	auto ret = make_uniq<SetIcebergTablePropertiesBindData>();
 	auto input_string = input.inputs[0].ToString();
 	VerifyInputIsNotAFile(context, input_string, "remove_iceberg_table_properties");
-	auto iceberg_table = IcebergUtils::GetTableEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_table = IcebergUtils::GetTableEntry(retriever, input_string, AclMode::Own);
 	if (!CheckTableIsIcebergTable(iceberg_table)) {
 		throw InvalidInputException("Cannot call set_iceberg_table_properties on non-iceberg table");
 	}
@@ -165,7 +169,9 @@ static unique_ptr<FunctionData> GetIcebergTablePropertiesBind(ClientContext &con
 	auto ret = make_uniq<SetIcebergTablePropertiesBindData>();
 	auto input_string = input.inputs[0].ToString();
 	VerifyInputIsNotAFile(context, input_string, "iceberg_table_properties");
-	auto iceberg_table = IcebergUtils::GetTableEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_table = IcebergUtils::GetTableEntry(retriever, input_string);
 	if (!CheckTableIsIcebergTable(iceberg_table)) {
 		throw InvalidInputException("Cannot call set_iceberg_table_properties on non-iceberg table");
 	}

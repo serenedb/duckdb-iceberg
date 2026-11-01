@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string.hpp"
@@ -63,7 +64,9 @@ static unique_ptr<FunctionData> IcebergColumnStatsBind(ClientContext &context, T
 
 	auto input_string = input.inputs[0].ToString();
 	IcebergOptions options(input.named_parameters);
-	auto resolved_metadata = IcebergUtils::ResolveTableMetadata(context, input_string, options);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto resolved_metadata = IcebergUtils::ResolveTableMetadata(retriever, input_string, options);
 	ret->metadata = std::move(resolved_metadata.metadata);
 
 	ret->snapshot_to_scan = ret->metadata.GetSnapshot(*options.snapshot_lookup);
