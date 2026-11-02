@@ -53,10 +53,8 @@ static bool WriteSequenceNumber(IcebergInsertVirtualColumns virtual_columns) {
 	       virtual_columns == IcebergInsertVirtualColumns::WRITE_ROW_ID_AND_SEQUENCE_NUMBER;
 }
 
-IcebergInsert::IcebergInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
-                             physical_index_vector_t<idx_t> column_index_map_p)
-    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table),
-      column_index_map(std::move(column_index_map_p)) {
+IcebergInsert::IcebergInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types, 1), table(&table) {
 }
 
 IcebergInsert::IcebergInsert(PhysicalPlan &physical_plan, LogicalOperator &op)
@@ -993,9 +991,6 @@ PhysicalOperator &IcebergCatalog::PlanInsert(ClientContext &context, PhysicalPla
 		throw BinderException("RETURNING clause not yet supported for insertion into Iceberg table");
 	}
 
-	if (!op.column_index_map.empty()) {
-		plan = planner.ResolveDefaultsProjection(op, *plan);
-	}
 	auto &table_entry = op.table.Cast<IcebergTableSchemaVersion>();
 	table_entry.PrepareIcebergScanFromEntry(context);
 
@@ -1012,7 +1007,7 @@ PhysicalOperator &IcebergCatalog::PlanInsert(ClientContext &context, PhysicalPla
 
 	// Create Copy Info
 	IcebergCopyInput copy_input(context, table_metadata, schema);
-	auto &insert = planner.Make<IcebergInsert>(op, updated_table_entry, op.column_index_map);
+	auto &insert = planner.Make<IcebergInsert>(op, updated_table_entry);
 	auto &physical_copy = IcebergInsert::PlanCopyForInsert(context, planner, copy_input, plan);
 	insert.children.push_back(physical_copy);
 

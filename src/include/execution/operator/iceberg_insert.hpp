@@ -98,8 +98,7 @@ public:
 class IcebergInsert : public PhysicalOperator {
 public:
 	//! INSERT INTO
-	IcebergInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table,
-	              physical_index_vector_t<idx_t> column_index_map);
+	IcebergInsert(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table);
 	IcebergInsert(PhysicalPlan &physical_plan, const vector<LogicalType> &types, TableCatalogEntry &table);
 
 	//! CREATE TABLE AS. The table itself is created by the IcebergCopyToFile below this insert,
@@ -108,8 +107,6 @@ public:
 
 	//! The table to insert into
 	optional_ptr<TableCatalogEntry> table;
-	//! column_index_map
-	physical_index_vector_t<idx_t> column_index_map;
 	//! When set, this insert is part of an UPDATE: points to the delete operator so Finalize
 	//! can call AddUpdateSnapshot instead of AddSnapshot.
 	optional_ptr<PhysicalOperator> update_delete_op;
