@@ -249,6 +249,7 @@ TableFunctionSet IcebergFunctions::GetIcebergLoadTableResponseFunction() {
 	auto fun = TableFunction(FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
 	                         IcebergLoadTableResponseFunction, IcebergLoadTableResponseBind,
 	                         IcebergLoadTableResponseGlobalState::Init);
+	fun.SetRequiredCapability(RoleCapability::Superuser);
 	function_set.AddFunction(fun);
 
 	return function_set;
