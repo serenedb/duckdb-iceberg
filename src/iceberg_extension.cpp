@@ -200,6 +200,14 @@ string IcebergExtension::Name() {
 	return "iceberg";
 }
 
+std::string IcebergExtension::Version() const {
+#ifdef EXT_VERSION_ICEBERG
+	return EXT_VERSION_ICEBERG;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {
