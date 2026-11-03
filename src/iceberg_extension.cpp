@@ -13,6 +13,7 @@
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/engine_host.hpp"
 #include "duckdb.hpp"
 
 #include "catalog/rest/iceberg_catalog.hpp"
@@ -190,7 +191,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto &log_manager = instance.GetLogManager();
 	log_manager.RegisterLogType(make_uniq<IcebergLogType>());
 	StorageExtension::Register(config, "iceberg", make_shared_ptr<IRCStorageExtension>());
-	PlannerExtension::Register(config, IcebergPlanner::Create());
+	if (!EngineHost::IsInstalled()) {
+		PlannerExtension::Register(config, IcebergPlanner::Create());
+	}
 }
 
 void IcebergExtension::Load(ExtensionLoader &loader) {
@@ -198,6 +201,14 @@ void IcebergExtension::Load(ExtensionLoader &loader) {
 }
 string IcebergExtension::Name() {
 	return "iceberg";
+}
+
+std::string IcebergExtension::Version() const {
+#ifdef EXT_VERSION_ICEBERG
+	return EXT_VERSION_ICEBERG;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb
