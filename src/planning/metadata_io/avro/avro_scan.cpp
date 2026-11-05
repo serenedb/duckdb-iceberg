@@ -24,16 +24,12 @@ struct ManifestFileVirtualColumn {
 
 AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<IcebergAvroScanInfo> avro_scan_info)
     : context(context), scan_info(avro_scan_info) {
-	auto &instance = DatabaseInstance::GetDatabase(context);
-	auto &system_catalog = Catalog::GetSystemCatalog(instance);
-	auto data = CatalogTransaction::GetSystemTransaction(instance);
-	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
-	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "read_avro");
-	if (!catalog_entry) {
+	auto avro_scan_entry =
+	    Catalog::GetBuiltinEntry<TableFunctionCatalogEntry>(DatabaseInstance::GetDatabase(context), "read_avro");
+	if (!avro_scan_entry) {
 		throw InvalidInputException("Function with name \"read_avro\" not found!");
 	}
-	auto &avro_scan_entry = catalog_entry->Cast<TableFunctionCatalogEntry>();
-	avro_scan = *avro_scan_entry.functions.functions[0];
+	avro_scan = *avro_scan_entry->functions.functions[0];
 
 	vector<Value> children;
 	children.reserve(1);

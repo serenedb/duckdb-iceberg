@@ -63,11 +63,7 @@ CopyFunctionCatalogEntry &IcebergUtils::GetCopyFunction(ClientContext &context, 
 		ExtensionHelper::AutoLoadExtension(db, extension_name);
 	}
 	D_ASSERT(!name.empty());
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-
-	auto entry = system_catalog.GetEntry<CopyFunctionCatalogEntry>(
-	    context, QualifiedName(system_catalog.GetName(), Identifier::DefaultSchema(), name),
-	    OnEntryNotFound::RETURN_NULL);
+	auto entry = Catalog::GetBuiltinEntry<CopyFunctionCatalogEntry>(context, name, OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		throw MissingExtensionException(
 		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension",

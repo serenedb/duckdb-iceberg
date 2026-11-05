@@ -52,17 +52,13 @@ void IcebergTableSchemaVersion::PrepareIcebergScanFromEntry(ClientContext &conte
 
 TableFunction IcebergTableSchemaVersion::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
                                                          const EntryLookupInfo &lookup) {
-	auto &db = DatabaseInstance::GetDatabase(context);
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &catalog_schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
-	auto catalog_entry = catalog_schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "iceberg_scan");
-	if (!catalog_entry) {
+	auto iceberg_scan_function_set =
+	    Catalog::GetBuiltinEntry<TableFunctionCatalogEntry>(DatabaseInstance::GetDatabase(context), "iceberg_scan");
+	if (!iceberg_scan_function_set) {
 		throw InvalidInputException("Function with name \"iceberg_scan\" not found!");
 	}
-	auto &iceberg_scan_function_set = catalog_entry->Cast<TableFunctionCatalogEntry>();
 	auto iceberg_scan_function =
-	    *iceberg_scan_function_set.functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
+	    *iceberg_scan_function_set->functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
 	PrepareIcebergScanFromEntry(context);
 
 	if (!schema_id.IsValid()) {

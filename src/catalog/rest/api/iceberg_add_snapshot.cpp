@@ -164,12 +164,9 @@ CreateCommitManifestFiles(const vector<IcebergPendingManifest> &pending_manifest
 
 void IcebergAddSnapshot::CreateUpdate(DatabaseInstance &db, ClientContext &context,
                                       IcebergCommitState &commit_state) const {
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
-	auto avro_copy_p = schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, "avro");
+	auto avro_copy_p = Catalog::GetBuiltinEntry<CopyFunctionCatalogEntry>(db, "avro");
 	D_ASSERT(avro_copy_p);
-	auto &avro_copy = avro_copy_p->Cast<CopyFunctionCatalogEntry>().function;
+	auto &avro_copy = avro_copy_p->function;
 
 	auto &table_metadata = commit_state.table_info.table_metadata;
 	const auto snapshot_id = IcebergSnapshot::NewSnapshotId();
