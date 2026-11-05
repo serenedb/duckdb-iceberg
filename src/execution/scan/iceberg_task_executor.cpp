@@ -93,8 +93,7 @@ IcebergTaskExecutor::IcebergTaskExecutor(ClientContext &context, shared_ptr<Iceb
 	info->file = IcebergMultiFileReader::FileInfo(task.file_path, task.file_format, task.file_size_in_bytes,
 	                                              task.first_row_id, task.sequence_number);
 	info->task = std::move(task);
-	auto &entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
-	    context, QualifiedName(SYSTEM_CATALOG, DEFAULT_SCHEMA, "parquet_scan"));
+	auto &entry = Catalog::GetBuiltinEntry<TableFunctionCatalogEntry>(context, Identifier("parquet_scan"));
 	function = *entry.functions.GetFunctionByArguments(context, {LogicalType::VARCHAR});
 	function.function_info = info;
 	function.get_multi_file_reader = IcebergTaskReader::CreateInstance;

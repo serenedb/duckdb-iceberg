@@ -27,7 +27,7 @@ AvroScan::AvroScan(const string &path, ClientContext &context, shared_ptr<Iceber
 	auto &instance = DatabaseInstance::GetDatabase(context);
 	auto &system_catalog = Catalog::GetSystemCatalog(instance);
 	auto data = CatalogTransaction::GetSystemTransaction(instance);
-	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+	auto &schema = system_catalog.GetSchema(data, *system_catalog.GetDefaultSchema());
 	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "read_avro");
 	if (!catalog_entry) {
 		throw InvalidInputException("Function with name \"read_avro\" not found!");
