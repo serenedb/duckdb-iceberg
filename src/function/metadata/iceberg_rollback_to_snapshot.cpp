@@ -76,7 +76,9 @@ static unique_ptr<FunctionData> IcebergRollbackToSnapshotBind(ClientContext &con
 		}
 	}
 
-	auto iceberg_table = IcebergUtils::GetTableEntry(context, input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto iceberg_table = IcebergUtils::GetTableEntry(retriever, input_string);
 	if (!CheckTableIsIcebergTable(iceberg_table)) {
 		throw InvalidInputException("Cannot call iceberg_rollback_to_snapshot on non-iceberg table");
 	}
@@ -86,6 +88,7 @@ static unique_ptr<FunctionData> IcebergRollbackToSnapshotBind(ClientContext &con
 	ret->snapshot_id = snapshot_value.GetValue<int64_t>();
 
 	if (input.binder) {
+		input.binder->RequireOwner(*iceberg_table);
 		DatabaseModificationType modification;
 		modification |= DatabaseModificationType::ALTER_TABLE;
 		input.binder->GetStatementProperties().RegisterDBModify(iceberg_table->ParentCatalog(), context, modification);

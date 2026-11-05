@@ -10,6 +10,7 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
@@ -37,11 +38,11 @@ public:
 	//! used for the allow_moved_paths debug option which allows us to test with iceberg tables that
 	//! were moved without their paths updated
 	static string GetFullPath(const string &iceberg_path, const string &relative_file_path, FileSystem &fs);
-	static string GetStorageLocation(ClientContext &context, const string &input);
-	static IcebergResolvedMetadata ResolveTableMetadata(ClientContext &context, const string &input,
+	static string GetStorageLocation(CatalogEntryRetriever &retriever, const string &input);
+	static IcebergResolvedMetadata ResolveTableMetadata(CatalogEntryRetriever &retriever, const string &input,
 	                                                    const IcebergOptions &options);
-	static optional_ptr<CatalogEntry> GetTableEntry(ClientContext &context, string &input_string);
-	static optional_ptr<SchemaCatalogEntry> GetSchemaEntry(ClientContext &context, string &input_string);
+	static optional_ptr<CatalogEntry> GetTableEntry(CatalogEntryRetriever &retriever, string &input_string);
+	static optional_ptr<SchemaCatalogEntry> GetSchemaEntry(CatalogEntryRetriever &retriever, string &input_string);
 	static idx_t CountOccurrences(const string &input, const string &to_find);
 	static CopyFunctionCatalogEntry &GetCopyFunction(ClientContext &context, const Identifier &name);
 	static idx_t ParseByteSizeOptionallyFormatted(const string &input);

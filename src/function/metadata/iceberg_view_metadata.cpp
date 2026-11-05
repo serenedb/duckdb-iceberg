@@ -73,7 +73,9 @@ static unique_ptr<FunctionData> IcebergViewMetadataBind(ClientContext &context, 
 
 	EntryLookupInfo view_lookup(CatalogType::VIEW_ENTRY,
 	                            QualifiedName(qualified_name[0], qualified_name[1], qualified_name[2]));
-	auto catalog_entry = Catalog::GetEntry(context, view_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	auto catalog_entry = retriever.GetEntry(view_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (catalog_entry->type != CatalogType::VIEW_ENTRY) {
 		throw InvalidInputException("'%s' is not a view", input_string);

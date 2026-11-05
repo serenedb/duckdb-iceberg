@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include "function/iceberg_functions.hpp"
 #include "iceberg_options.hpp"
@@ -73,7 +74,9 @@ static unique_ptr<FunctionData> IcebergSnapshotsBind(ClientContext &context, Tab
 		}
 	}
 	auto input_string = input.inputs[0].ToString();
-	bind_data->metadata = std::move(IcebergUtils::ResolveTableMetadata(context, input_string, options).metadata);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
+	bind_data->metadata = std::move(IcebergUtils::ResolveTableMetadata(retriever, input_string, options).metadata);
 
 	names.emplace_back("sequence_number");
 	return_types.emplace_back(LogicalType::UBIGINT);

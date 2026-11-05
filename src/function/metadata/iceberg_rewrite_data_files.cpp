@@ -167,6 +167,7 @@ static unique_ptr<LogicalOperator> RewriteDataFilesBindOperator(ClientContext &c
 		throw InternalException("iceberg_rewrite_data_files: bind_operator called without a binder");
 	}
 	auto plan_input = ParseRewritePlanInput(input);
+	input.binder->RequireOwner(input.binder->EntryRetriever().GetEntry<TableCatalogEntry>(plan_input.table_name));
 	input.binder->SetAlwaysRequireRebind();
 	auto plan = PlanRewrite(context, plan_input);
 
