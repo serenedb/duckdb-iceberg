@@ -980,7 +980,7 @@ TableFunctionSet IcebergFunctions::GetIcebergToDuckLakeFunction() {
 	fun.GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
 		options.Add("skip_tables", LogicalType::LIST(LogicalTypeId::VARCHAR));
 	});
-	fun.SetRequiredCapability(RoleCapability::Superuser);
+	fun.required_capability = RoleCapability::Superuser;
 	function_set.AddFunction(fun);
 
 	return function_set;
