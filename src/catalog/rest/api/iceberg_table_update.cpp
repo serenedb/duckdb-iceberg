@@ -87,7 +87,7 @@ void IcebergCommitState::LoadExistingManifests(DatabaseInstance &db,
 
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+	auto &schema = system_catalog.GetSchema(data, *system_catalog.GetDefaultSchema());
 	auto avro_copy_p = schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, "avro");
 	D_ASSERT(avro_copy_p);
 	auto &avro_copy = avro_copy_p->Cast<CopyFunctionCatalogEntry>().function;
