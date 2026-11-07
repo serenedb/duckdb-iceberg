@@ -447,17 +447,6 @@ IcebergSortOrder IcebergTable::BuildSortOrder(ClientContext &context, const vect
 	return new_sort_order;
 }
 
-IcebergSortOrder IcebergTable::BuildSortOrder(ClientContext &context,
-                                              const vector<unique_ptr<ParsedExpression>> &sort_keys,
-                                              const IcebergTableSchema &schema, int32_t sort_order_id) {
-	vector<OrderByNode> orders;
-	orders.reserve(sort_keys.size());
-	for (auto &key : sort_keys) {
-		orders.emplace_back(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, key->Copy());
-	}
-	return BuildSortOrder(context, orders, schema, sort_order_id);
-}
-
 void IcebergTable::SetPartitionedBy(IcebergTransaction &transaction,
                                     const vector<unique_ptr<ParsedExpression>> &partition_keys,
                                     const IcebergTableSchema &schema) {

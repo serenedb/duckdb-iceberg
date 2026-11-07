@@ -223,6 +223,53 @@ order by file_row_number;
 statement ok
 drop table if exists my_datalake.default.test_create_table_partitioned_and_sorted;
 
+# Explicit directions on the sort keys; a bare key still takes the defaults
+
+statement ok
+drop table if exists my_datalake.default.test_create_table_sorted_by_desc;
+
+statement ok
+CREATE TABLE my_datalake.default.test_create_table_sorted_by_desc (a int, b int)
+SORTED BY (a DESC NULLS FIRST, b);
+
+query ITTTTT
+SELECT
+	metadata."default-sort-order-id",
+	sort_order.fields[1].transform,
+	sort_order.fields[1].direction,
+	sort_order.fields[1]."null-order",
+	sort_order.fields[2].direction,
+	sort_order.fields[2]."null-order"
+FROM iceberg_load_table_response(my_datalake.default.test_create_table_sorted_by_desc),
+unnest(metadata."sort-orders"::VARIANT[]) AS t(sort_order)
+WHERE try_cast(sort_order."order-id" AS INTEGER) = metadata."default-sort-order-id";
+----
+1	identity	desc	nulls-first	asc	nulls-last
+
+statement ok
+insert into my_datalake.default.test_create_table_sorted_by_desc values (1, 10), (NULL, 0), (3, 30), (2, 20);
+
+statement ok
+set variable file_path = (
+	select file_path
+	from iceberg_metadata(my_datalake.default.test_create_table_sorted_by_desc)
+	limit 1
+);
+
+query II
+select a, b
+from my_datalake.default.test_create_table_sorted_by_desc
+where filename = getvariable('file_path')
+order by file_row_number;
+----
+NULL	0
+3	30
+2	20
+1	10
+
+statement ok
+drop table if exists my_datalake.default.test_create_table_sorted_by_desc;
+
 # Errors
 
 statement ok
