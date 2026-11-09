@@ -279,11 +279,7 @@ unique_ptr<HTTPResponse> AWSInput::Request(RequestType request_type, ClientConte
 	case RequestType::POST_REQUEST: {
 		PostRequestInfo post_request(request_url, res, params, reinterpret_cast<const_data_ptr_t>(data.c_str()),
 		                             data.size());
-		auto x = session.Request(post_request);
-		if (x) {
-			x->body = post_request.buffer_out;
-		}
-		return x;
+		return session.Request(post_request);
 	}
 	default:
 		throw NotImplementedException("Cannot make request of type %s", EnumUtil::ToString(request_type));
