@@ -32,7 +32,7 @@ static unique_ptr<FunctionData> IcebergBucketBind(BindScalarFunctionInput &input
 	auto &num_buckets_expr = *arguments[0];
 	Value num_buckets_val;
 	if (num_buckets_expr.IsFoldable() &&
-	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), num_buckets_expr, num_buckets_val)) {
+	    ExpressionExecutor::TryEvaluateFoldable(input.GetClientContext(), num_buckets_expr, num_buckets_val)) {
 		if (!num_buckets_val.IsNull() && num_buckets_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_bucket: modulo must be a positive integer, got %d",
 			                            num_buckets_val.GetValue<int32_t>());
@@ -152,7 +152,7 @@ static unique_ptr<FunctionData> IcebergBucketDecimalBind(BindScalarFunctionInput
 	auto &num_buckets_expr = *arguments[0];
 	Value num_buckets_val;
 	if (num_buckets_expr.IsFoldable() &&
-	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), num_buckets_expr, num_buckets_val)) {
+	    ExpressionExecutor::TryEvaluateFoldable(input.GetClientContext(), num_buckets_expr, num_buckets_val)) {
 		if (!num_buckets_val.IsNull() && num_buckets_val.GetValue<int32_t>() <= 0) {
 			throw InvalidInputException("iceberg_bucket: modulo must be a positive integer, got %d",
 			                            num_buckets_val.GetValue<int32_t>());
@@ -227,7 +227,7 @@ static unique_ptr<FunctionData> IcebergTruncateBind(BindScalarFunctionInput &inp
 	auto &width_expr = *arguments[0];
 	Value width_val;
 	if (width_expr.IsFoldable() &&
-	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), width_expr, width_val)) {
+	    ExpressionExecutor::TryEvaluateFoldable(input.GetClientContext(), width_expr, width_val)) {
 		if (!width_val.IsNull()) {
 			IcebergHash::TruncateWidth(width_val.GetValue<int32_t>());
 		}
@@ -282,7 +282,7 @@ static unique_ptr<FunctionData> IcebergTruncateDecimalBind(BindScalarFunctionInp
 	auto &width_expr = *arguments[0];
 	Value width_val;
 	if (width_expr.IsFoldable() &&
-	    ExpressionExecutor::TryEvaluateScalar(input.GetClientContext(), width_expr, width_val)) {
+	    ExpressionExecutor::TryEvaluateFoldable(input.GetClientContext(), width_expr, width_val)) {
 		if (!width_val.IsNull()) {
 			IcebergHash::TruncateWidth(width_val.GetValue<int32_t>());
 		}

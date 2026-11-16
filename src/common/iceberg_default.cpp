@@ -165,7 +165,8 @@ static Value EvaluateStructDefault(ClientContext &context, const Expression &def
 	// value we expect. For the Iceberg envelope the descriptor (argument 2) is non-NULL, therefore normal
 	// constant_or_null semantics make this exactly the whole-STRUCT default from argument 1.
 	Value default_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, default_expr, default_value)) {
+	if (!ExpressionExecutor::TryEvaluateFoldable(context, default_expr, default_value,
+	                                             NumericLimits<idx_t>::Maximum())) {
 		throw BinderException("Cannot resolve partial STRUCT insert with non-constant default value");
 	}
 	if (default_expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {

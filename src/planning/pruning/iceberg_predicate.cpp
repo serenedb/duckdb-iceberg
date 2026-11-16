@@ -157,7 +157,7 @@ static bool TryEvaluateVariantScalarBound(ClientContext &context, const Expressi
 	D_ASSERT(comparator.GetChildren().size() == 1);
 
 	Value bound;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, *comparator.GetChildren()[0], bound) || bound.IsNull()) {
+	if (!ExpressionExecutor::TryEvaluateFoldable(context, *comparator.GetChildren()[0], bound) || bound.IsNull()) {
 		return false;
 	}
 	D_ASSERT(bound.type().id() == LogicalTypeId::VARIANT);
@@ -170,7 +170,7 @@ static bool TryEvaluateVariantScalarBound(ClientContext &context, const Expressi
 		// Missing fields and reconstructed containers are not scalar bounds.
 		return false;
 	default:
-		return ExpressionExecutor::TryEvaluateScalar(context, expr, result);
+		return ExpressionExecutor::TryEvaluateFoldable(context, expr, result);
 	}
 }
 
@@ -188,7 +188,7 @@ bool MatchVariantBounds(ClientContext &context, ExpressionType comparison_type, 
 	upper_replacer.VisitExpression(&upper_copy);
 
 	Value right_constant;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, right, right_constant)) {
+	if (!ExpressionExecutor::TryEvaluateFoldable(context, right, right_constant)) {
 		return true;
 	}
 

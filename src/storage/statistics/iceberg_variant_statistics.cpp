@@ -112,7 +112,7 @@ static optional<string> SerializeBoundsVariant(ClientContext &context, Value bou
 	}
 
 	Value result;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, *expr, result) || result.IsNull()) {
+	if (!ExpressionExecutor::TryEvaluateFoldable(context, *expr, result) || result.IsNull()) {
 		return std::nullopt;
 	}
 
@@ -301,7 +301,7 @@ bool IcebergVariantBoundsReader::Deserialize(ClientContext &context, const strin
 	}
 
 	Value variant_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, *expr, variant_value) || variant_value.IsNull()) {
+	if (!ExpressionExecutor::TryEvaluateFoldable(context, *expr, variant_value) || variant_value.IsNull()) {
 		return false;
 	}
 	result = std::move(variant_value);
