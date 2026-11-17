@@ -1,0 +1,9 @@
+# name: test/sql/local/partitioning/bucket_zero.test
+# group: [partitioning]
+
+include test/sql/init_requires
+
+statement error
+select user_id from ICEBERG_SCAN('{WORKING_DIRECTORY}/data/persistent/partition_bucket_zero') WHERE partition_col = 42;
+----
+Invalid partition transform 'bucket[0]': its parameter must be a positive integer

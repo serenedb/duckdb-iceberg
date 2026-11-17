@@ -1,5 +1,6 @@
 #include "core/expression/iceberg_transform.hpp"
 
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -130,25 +131,29 @@ IcebergTransform IcebergTransform::FromExpression(const ParsedExpression &expr, 
 	throw NotImplementedException("Unsupported partition key type: %s", expr.ToString());
 }
 
+static int32_t TransformParameter(const string &transform, std::string_view name) {
+	const auto start = name.size();
+	const auto end = transform.size() - 1;
+	int32_t value = 0;
+	if (transform.size() < start + 3 || transform[start] != '[' || transform[end] != ']' ||
+	    !TryCast::Operation(string_t(transform.data() + start + 1, UnsafeNumericCast<uint32_t>(end - start - 1)), value,
+	                        true) ||
+	    value <= 0) {
+		throw InvalidInputException("Invalid partition transform '%s': its parameter must be a positive integer",
+		                            transform);
+	}
+	return value;
+}
+
 IcebergTransform::IcebergTransform(const string &transform) : raw_transform(transform) {
 	if (transform == "identity") {
 		type = IcebergTransformType::IDENTITY;
 	} else if (StringUtil::StartsWith(transform, "bucket")) {
 		type = IcebergTransformType::BUCKET;
-		D_ASSERT(transform[6] == '[');
-		D_ASSERT(transform.back() == ']');
-		auto start = transform.find('[');
-		auto end = transform.rfind(']');
-		auto digits = transform.substr(start + 1, end - start);
-		modulo = std::stoi(digits);
+		modulo = TransformParameter(transform, "bucket");
 	} else if (StringUtil::StartsWith(transform, "truncate")) {
 		type = IcebergTransformType::TRUNCATE;
-		D_ASSERT(transform[8] == '[');
-		D_ASSERT(transform.back() == ']');
-		auto start = transform.find('[');
-		auto end = transform.rfind(']');
-		auto digits = transform.substr(start + 1, end - start);
-		width = std::stoi(digits);
+		width = TransformParameter(transform, "truncate");
 	} else if (transform == "year") {
 		type = IcebergTransformType::YEAR;
 	} else if (transform == "month") {
