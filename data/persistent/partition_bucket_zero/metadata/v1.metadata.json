@@ -1,0 +1,69 @@
+{
+  "format-version" : 2,
+  "table-uuid" : "6f0c3a52-4f2e-4a8e-9d4b-2b1f0c9e7a11",
+  "location" : "data/persistent/partition_bucket_zero",
+  "last-sequence-number" : 1,
+  "last-updated-ms" : 1746881357175,
+  "last-column-id" : 3,
+  "current-schema-id" : 0,
+  "schemas" : [ {
+    "type" : "struct",
+    "schema-id" : 0,
+    "fields" : [ {
+      "id" : 1,
+      "name" : "partition_col",
+      "required" : false,
+      "type" : "int"
+    }, {
+      "id" : 2,
+      "name" : "user_id",
+      "required" : false,
+      "type" : "long"
+    }, {
+      "id" : 3,
+      "name" : "event_type",
+      "required" : false,
+      "type" : "string"
+    } ]
+  } ],
+  "default-spec-id" : 0,
+  "partition-specs" : [ {
+    "spec-id" : 0,
+    "fields" : [ {
+      "name" : "partition_col",
+      "transform" : "bucket[0]",
+      "source-id" : 1,
+      "field-id" : 1000
+    } ]
+  } ],
+  "last-partition-id" : 1000,
+  "default-sort-order-id" : 0,
+  "sort-orders" : [ {
+    "order-id" : 0,
+    "fields" : [ ]
+  } ],
+  "properties" : { },
+  "current-snapshot-id" : 5470601323427916272,
+  "refs" : {
+    "main" : {
+      "snapshot-id" : 5470601323427916272,
+      "type" : "branch"
+    }
+  },
+  "snapshots" : [ {
+    "sequence-number" : 1,
+    "snapshot-id" : 5470601323427916272,
+    "timestamp-ms" : 1746881357175,
+    "summary" : {
+      "operation" : "append"
+    },
+    "manifest-list" : "data/persistent/partition_integer/metadata/snap-5470601323427916272-1-b1dda674-423f-4f23-b00d-92b608b07a38.avro",
+    "schema-id" : 0
+  } ],
+  "statistics" : [ ],
+  "snapshot-log" : [ {
+    "timestamp-ms" : 1746881357175,
+    "snapshot-id" : 5470601323427916272
+  } ],
+  "metadata-log" : [ ]
+}
