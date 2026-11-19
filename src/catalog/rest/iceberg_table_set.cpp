@@ -661,8 +661,8 @@ optional_ptr<CatalogEntry> IcebergTableSet::ApplyViewLoadResult(ClientContext &c
 			parser.ParseQuery(view_sql);
 		} catch (const ParserException &ex) {
 			const auto parser_error = ErrorData(ex).RawMessage();
-			unsupported_reason = "its SQL dialect cannot be parsed by DuckDB: " + parser_error;
-			DUCKDB_LOG_DEBUG(context, "View '%s' SQL could not be parsed by DuckDB: %s", view_name, parser_error);
+			unsupported_reason = "its SQL cannot be parsed: " + parser_error;
+			DUCKDB_LOG_DEBUG(context, "View '%s' SQL could not be parsed: %s", view_name, parser_error);
 		}
 		if (unsupported_reason.empty()) {
 			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {

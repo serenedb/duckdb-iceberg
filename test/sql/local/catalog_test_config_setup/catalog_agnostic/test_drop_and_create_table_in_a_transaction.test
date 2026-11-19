@@ -87,9 +87,9 @@ ROLLBACK
 statement error con3
 create or replace table my_datalake.default.duid (a int);
 ----
-<REGEX>:.*Not implemented Error.*CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements.*
+<REGEX>:.*Not implemented Error.*CREATE OR REPLACE is not supported in Iceberg catalogs. Please use separate Drop and Create Statements.*
 
 statement error con1
 create or replace schema my_datalake.default.new_schema;
 ----
-Not implemented Error: CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements
+Not implemented Error: CREATE OR REPLACE is not supported in Iceberg catalogs. Please use separate Drop and Create Statements

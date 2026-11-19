@@ -73,7 +73,7 @@ select * from test_view_v1 order by i;
 statement error
 create or replace view test_view_v1 as select i * 10 as i_times_10 from test_view_base_table;
 ----
-<REGEX>:.*CREATE OR REPLACE not supported.*
+<REGEX>:.*CREATE OR REPLACE is not supported in Iceberg catalogs.*
 
 # The original view must be untouched by the rejected REPLACE
 query II

@@ -157,7 +157,7 @@ optional_ptr<CatalogEntry> IcebergCatalog::CreateSchema(CatalogTransaction trans
 	optional_ptr<ClientContext> context = transaction.GetContext();
 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		throw NotImplementedException(
-		    "CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements");
+		    "CREATE OR REPLACE is not supported in Iceberg catalogs. Please use separate Drop and Create Statements");
 	}
 
 	D_ASSERT(context);
@@ -547,7 +547,7 @@ void IcebergCatalog::VerifyMergeOnRead(const IcebergTableMetadata &metadata, con
 		return;
 	}
 	throw NotImplementedException(
-	    "DuckDB-Iceberg only supports merge-on-read for deletes, updates and merges. Table Property '%s' is set to "
+	    "Only merge-on-read is supported for deletes, updates and merges. Table Property '%s' is set to "
 	    "'%s' for table %s. You can modify Iceberg table properties with the set_iceberg_table_properties() "
 	    "function, and remove them with the remove_iceberg_table_properties() function. You can view Iceberg table "
 	    "properties with the iceberg_table_properties() function",

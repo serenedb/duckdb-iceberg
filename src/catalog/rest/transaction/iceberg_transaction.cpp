@@ -838,7 +838,7 @@ void IcebergTransaction::DoViewCreates(ClientContext &context) {
 		// summary
 		auto summary_obj = writer.CreateObject();
 		version_obj.Add("summary", summary_obj);
-		summary_obj.AddString("engine-name", "DuckDB");
+		summary_obj.AddString("engine-name", DBConfig::GetConfig(context).options.product_name);
 
 		// default-namespace
 		auto ns_arr = writer.CreateArray();

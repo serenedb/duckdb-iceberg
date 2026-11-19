@@ -51,7 +51,7 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
 	auto existing_entry = GetEntry(transaction, catalog_type, Identifier(entry_name));
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		throw NotImplementedException(
-		    "CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements");
+		    "CREATE OR REPLACE is not supported in Iceberg catalogs. Please use separate Drop and Create Statements");
 	}
 	if (!existing_entry) {
 		// If there is no existing entry, make sure the entry has not been deleted in this transaction.
@@ -80,7 +80,8 @@ bool IcebergSchemaEntry::HandleCreateConflict(CatalogTransaction &transaction, C
 		return false;
 	}
 	default:
-		throw NotImplementedException("DuckDB-Iceberg, Unsupported conflict type: %s", EnumUtil::ToString(on_conflict));
+		throw NotImplementedException("Unsupported conflict type in an Iceberg catalog: %s",
+		                              EnumUtil::ToString(on_conflict));
 	}
 	return true;
 }
@@ -227,7 +228,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateView(CatalogTransaction tra
 
 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		throw NotImplementedException(
-		    "CREATE OR REPLACE not supported in DuckDB-Iceberg. Please use separate Drop and Create Statements");
+		    "CREATE OR REPLACE is not supported in Iceberg catalogs. Please use separate Drop and Create Statements");
 	}
 
 	auto existing_entry = GetEntry(transaction, CatalogType::TABLE_ENTRY, info.GetViewName());
