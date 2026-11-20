@@ -42,9 +42,7 @@ unique_ptr<HTTPResponse> APIUtils::Request(RequestType request_type, ClientConte
 	case RequestType::POST_REQUEST: {
 		PostRequestInfo post_request(request_url, headers, params, reinterpret_cast<const_data_ptr_t>(data.data()),
 		                             data.size());
-		auto response = session.Request(post_request);
-		response->body = post_request.buffer_out;
-		return response;
+		return session.Request(post_request);
 	}
 	case RequestType::HEAD_REQUEST: {
 		HeadRequestInfo head_request(request_url, headers, params);
