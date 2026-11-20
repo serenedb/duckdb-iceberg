@@ -102,11 +102,13 @@ static unique_ptr<FunctionData> IcebergScanPlanBind(ClientContext &context, Tabl
 	IcebergTableSchemaVersion *table_entry = nullptr;
 	shared_ptr<IcebergScanInfo> scan_info;
 	auto qualified_name = QualifiedName::ParseComponents(input_string);
+	CatalogEntryRetriever own_retriever(context);
+	auto &retriever = input.binder ? input.binder->EntryRetriever() : own_retriever;
 	optional_ptr<CatalogEntry> catalog_entry;
 	if (qualified_name.size() == 3) {
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY,
 		                             QualifiedName(qualified_name[0], qualified_name[1], qualified_name[2]));
-		catalog_entry = Catalog::GetEntry(context, table_lookup, OnEntryNotFound::RETURN_NULL);
+		catalog_entry = retriever.GetEntry(table_lookup, OnEntryNotFound::RETURN_NULL);
 	}
 	if (catalog_entry) {
 		if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
@@ -126,7 +128,7 @@ static unique_ptr<FunctionData> IcebergScanPlanBind(ClientContext &context, Tabl
 			scan_info->transaction_data = table_entry->table_info.transaction_data.get();
 		}
 	} else {
-		auto resolved = IcebergUtils::ResolveTableMetadata(context, input_string, options);
+		auto resolved = IcebergUtils::ResolveTableMetadata(retriever, input_string, options);
 		auto temp_data = make_uniq<IcebergScanTemporaryData>(std::move(resolved.metadata));
 		auto &metadata = temp_data->metadata;
 		auto snapshot = metadata.GetSnapshot(*options.snapshot_lookup);
