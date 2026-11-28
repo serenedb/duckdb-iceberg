@@ -55,8 +55,9 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identi
 	}
 	if (!planner->HasScanInfo()) {
 		D_ASSERT(!planner->GetPath().empty());
+		CatalogEntryRetriever retriever(planner->GetContext());
 		auto resolved_metadata =
-		    IcebergUtils::ResolveTableMetadata(planner->GetContext(), planner->GetPath(), planner->GetOptions());
+		    IcebergUtils::ResolveTableMetadata(retriever, planner->GetPath(), planner->GetOptions());
 		auto temp_data = make_uniq<IcebergScanTemporaryData>(std::move(resolved_metadata.metadata));
 		auto &metadata = temp_data->metadata;
 		auto snapshot_info = metadata.GetSnapshot(*planner->GetOptions().snapshot_lookup);

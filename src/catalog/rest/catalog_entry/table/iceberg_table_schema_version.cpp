@@ -166,4 +166,8 @@ TableStorageInfo IcebergTableSchemaVersion::GetStorageInfo(ClientContext &contex
 	return result;
 }
 
+std::string_view IcebergTableSchemaVersion::GetStorageLocation() const {
+	return table_info.table_metadata.location;
+}
+
 } // namespace duckdb
